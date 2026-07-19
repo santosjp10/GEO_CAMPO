@@ -24,8 +24,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Configurar Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Aceitar licenças do Android SDK (já pré-instalado no runner)
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      - name: Garantir plataforma e build-tools necessários
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Instalar dependências do projeto
         run: npm install
@@ -37,7 +40,7 @@ jobs:
         run: chmod +x android/gradlew
 
       - name: Compilar APK de depuração (instalável direto no celular)
-        run: cd android && ./gradlew assembleDebug --no-daemon
+        run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Publicar o APK como artefato do build
         uses: actions/upload-artifact@v4
