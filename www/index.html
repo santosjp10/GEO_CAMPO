@@ -358,15 +358,21 @@ body.measuring #captureCluster, body.measuring #fabStack, body.measuring #modeSt
 .row-btn .tx .t2{font-size:11px; color:var(--text-faint); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .row-btn .chev{color:var(--text-faint);}
 .exp-icon-btn{width:36px; height:36px; border-radius:10px; background:var(--panel-3); border:1px solid var(--border); color:var(--teal); font-size:16px; flex:none;}
-.basemap-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:6px;}
-.bm-opt{border:2px solid var(--border); border-radius:12px; padding:10px; text-align:center; position:relative;}
+.basemap-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:6px;}
+.bm-opt{border:2px solid var(--border); border-radius:12px; padding:8px 6px; text-align:center; position:relative;}
 .bm-opt.sel{border-color:var(--teal);}
-.bm-opt .sw{width:100%; height:52px; border-radius:8px; margin-bottom:8px;}
-.bm-opt .lb{font-size:12px; font-weight:600;}
+.bm-opt .sw{width:100%; height:40px; border-radius:8px; margin-bottom:6px;}
+.bm-opt .lb{font-size:10.5px; font-weight:600; line-height:1.25;}
+.bm-opt .src{font-size:8.5px; color:var(--text-faint); font-weight:400; display:block;}
 .sw.sat{background:linear-gradient(135deg,#2b3d2c,#5b6b3f,#8a9163);}
 .sw.hyb{background:linear-gradient(135deg,#25322a,#4c5c3e,#7d8459); position:relative;}
 .sw.streets{background:linear-gradient(135deg,#e7ecef,#c8d0d6); }
+.sw.streetsLight{background:linear-gradient(135deg,#f8f9f7,#e6e8e3);}
 .sw.topo{background:linear-gradient(135deg,#e9dfc2,#c8b98a,#8ea06b);}
+.sw.esriTopo{background:linear-gradient(135deg,#e4dcc0,#b9c98f,#7fa06a);}
+.sw.esriStreet{background:linear-gradient(135deg,#f3e9d2,#e8c9a0,#d9a86c);}
+.sw.esriTerrain{background:linear-gradient(135deg,#cbb994,#a98f63,#7c6b46);}
+.sw.esriRelief{background:linear-gradient(135deg,#dcdcdc,#a8a8a8,#707070);}
 
 .field{margin-bottom:14px;}
 .field label{display:block; font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;}
@@ -662,12 +668,18 @@ svg{display:block;}
   <div class="sheet">
     <h2>Mapa base <span class="x" data-close>&times;</span></h2>
     <div class="basemap-grid">
-      <div class="bm-opt" data-layer="satellite"><div class="sw sat"></div><div class="lb">Satélite</div></div>
-      <div class="bm-opt" data-layer="hybrid"><div class="sw hyb"></div><div class="lb">Híbrido</div></div>
-      <div class="bm-opt" data-layer="streets"><div class="sw streets"></div><div class="lb">Ruas</div></div>
-      <div class="bm-opt" data-layer="topo"><div class="sw topo"></div><div class="lb">Topográfico</div></div>
+      <div class="bm-opt" data-layer="satellite"><div class="sw sat"></div><div class="lb">Satélite<span class="src">Esri</span></div></div>
+      <div class="bm-opt" data-layer="hybrid"><div class="sw hyb"></div><div class="lb">Híbrido<span class="src">Esri</span></div></div>
+      <div class="bm-opt" data-layer="streets"><div class="sw streets"></div><div class="lb">Ruas<span class="src">OSM</span></div></div>
+      <div class="bm-opt" data-layer="streetsLight"><div class="sw streetsLight"></div><div class="lb">Ruas claro<span class="src">CARTO</span></div></div>
+      <div class="bm-opt" data-layer="topo"><div class="sw topo"></div><div class="lb">Topográfico<span class="src">OpenTopoMap</span></div></div>
+      <div class="bm-opt" data-layer="esriTopo"><div class="sw esriTopo"></div><div class="lb">Topográfico<span class="src">Esri</span></div></div>
+      <div class="bm-opt" data-layer="esriStreet"><div class="sw esriStreet"></div><div class="lb">Ruas<span class="src">Esri</span></div></div>
+      <div class="bm-opt" data-layer="esriTerrain"><div class="sw esriTerrain"></div><div class="lb">Terreno<span class="src">Esri</span></div></div>
+      <div class="bm-opt" data-layer="esriRelief"><div class="sw esriRelief"></div><div class="lb">Relevo<span class="src">Esri</span></div></div>
     </div>
-    <div class="sub" style="margin:0 0 12px 0;">Toque duas vezes no botão de camadas no mapa para alternar rapidamente entre as 4 bases sem abrir este menu.</div>
+    <div class="hint">Google Maps não está disponível aqui: o acesso aos tiles do Google fora da API oficial (com chave própria e conta de faturamento) viola os termos de uso do Google Maps Platform. As opções acima são todas de fontes de acesso livre e sem necessidade de cadastro.</div>
+    <div class="sub" style="margin:0 0 12px 0;">Toque duas vezes no botão de camadas no mapa para alternar rapidamente entre as bases sem abrir este menu.</div>
     <div class="field">
       <label>Transparência da base atual: <span id="opacityVal">100%</span></label>
       <input type="range" id="cfgOpacity" min="20" max="100" value="100" style="width:100%;">
@@ -677,9 +689,14 @@ svg{display:block;}
       <label>Comparar com</label>
       <select id="cfgCompareWith">
         <option value="">Desativado</option>
-        <option value="satellite">Satélite</option>
-        <option value="streets">Ruas</option>
-        <option value="topo">Topográfico</option>
+        <option value="satellite">Satélite (Esri)</option>
+        <option value="streets">Ruas (OSM)</option>
+        <option value="streetsLight">Ruas — claro</option>
+        <option value="topo">Topográfico (OpenTopoMap)</option>
+        <option value="esriTopo">Topográfico (Esri)</option>
+        <option value="esriStreet">Ruas (Esri)</option>
+        <option value="esriTerrain">Terreno (Esri)</option>
+        <option value="esriRelief">Relevo (Esri)</option>
       </select>
     </div>
     <div class="hint">Ativa uma linha divisória arrastável no mapa: de um lado a base atual, do outro a base escolhida — útil para comparar imagem de satélite com traçado de ruas, por exemplo.</div>
@@ -1045,7 +1062,7 @@ async function setActiveProject(id){
 function currentProject(){ return state.projects[state.activeId]; }
 
 /* ===================== MAPA ===================== */
-var map = L.map('map', { zoomControl:false, attributionControl:true }).setView([-11.727, -49.070], 13); // Gurupi-TO aprox.
+var map = L.map('map', { zoomControl:false, attributionControl:true, maxZoom:22 }).setView([-11.727, -49.070], 13); // Gurupi-TO aprox.
 
 var TILE_CACHE = 'geocampo-tiles-v1';
 var cacheSupported = ('caches' in window);
@@ -1083,14 +1100,33 @@ var CachedTileLayer = L.TileLayer.extend({
     return tile;
   }
 });
-function cachedTileLayer(url, opts){ return new CachedTileLayer(url, opts); }
+// maxZoom=22 permite continuar ampliando visualmente (upscale da última imagem disponível);
+// maxNativeZoom é o limite real de resolução de cada fonte — evita pedir tiles inexistentes ao servidor.
+function cachedTileLayer(url, opts){
+  opts = opts || {};
+  opts.maxZoom = 22;
+  return new CachedTileLayer(url, opts);
+}
 
 var layers = {
-  satellite: cachedTileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:20, attribution:'Esri World Imagery'}),
-  streets: cachedTileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap'}),
-  topo: cachedTileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {maxZoom:17, attribution:'&copy; OpenTopoMap (CC-BY-SA)'}),
+  satellite: cachedTileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { maxNativeZoom:19, attribution:'Esri, Maxar, Earthstar Geographics' }),
+  streets: cachedTileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { maxNativeZoom:19, attribution:'&copy; OpenStreetMap' }),
+  streetsLight: cachedTileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    { maxNativeZoom:20, subdomains:'abcd', attribution:'&copy; OpenStreetMap, &copy; CARTO' }),
+  topo: cachedTileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    { maxNativeZoom:17, attribution:'&copy; OpenTopoMap (CC-BY-SA)' }),
+  esriTopo: cachedTileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    { maxNativeZoom:19, attribution:'Esri, HERE, Garmin, FAO, NOAA' }),
+  esriStreet: cachedTileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    { maxNativeZoom:19, attribution:'Esri, HERE, Garmin' }),
+  esriTerrain: cachedTileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}',
+    { maxNativeZoom:13, attribution:'Esri, USGS, NOAA' }),
+  esriRelief: cachedTileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}',
+    { maxNativeZoom:13, attribution:'Esri' }),
 };
-var hybridLabels = cachedTileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {maxZoom:20});
+var hybridLabels = cachedTileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom:19 });
 var hybridGroup = L.layerGroup([layers.satellite, hybridLabels]);
 
 var activeLayer = null;
@@ -2239,8 +2275,12 @@ function centerOfFeature(f){
 }
 
 /* ===================== CAMADAS ===================== */
-var BASEMAP_ORDER = ['satellite','hybrid','streets','topo'];
-var BASEMAP_NAMES = { satellite:'Satélite', hybrid:'Híbrido', streets:'Ruas', topo:'Topográfico' };
+var BASEMAP_ORDER = ['satellite','hybrid','streets','streetsLight','topo','esriTopo','esriStreet','esriTerrain','esriRelief'];
+var BASEMAP_NAMES = {
+  satellite:'Satélite (Esri)', hybrid:'Híbrido', streets:'Ruas (OSM)', streetsLight:'Ruas — claro',
+  topo:'Topográfico (OpenTopoMap)', esriTopo:'Topográfico (Esri)', esriStreet:'Ruas (Esri)',
+  esriTerrain:'Terreno (Esri)', esriRelief:'Relevo (Esri)'
+};
 var lastLayersTap = 0;
 el('btnLayers').addEventListener('click', function(){
   var now = Date.now();
