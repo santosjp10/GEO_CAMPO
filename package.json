@@ -13,5 +13,8 @@
     "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
     "proj4": "^2.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
   }
 }
