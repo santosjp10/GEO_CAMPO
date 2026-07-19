@@ -12,7 +12,6 @@
     "@capacitor/geolocation": "^6.1.1",
     "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
-    "leaflet.gridlayer.googlemutant": "^0.16.0",
     "proj4": "^2.9.0"
   },
   "devDependencies": {

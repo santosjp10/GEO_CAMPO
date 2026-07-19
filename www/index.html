@@ -373,9 +373,6 @@ body.measuring #captureCluster, body.measuring #fabStack, body.measuring #modeSt
 .sw.esriStreet{background:linear-gradient(135deg,#f3e9d2,#e8c9a0,#d9a86c);}
 .sw.esriTerrain{background:linear-gradient(135deg,#cbb994,#a98f63,#7c6b46);}
 .sw.esriRelief{background:linear-gradient(135deg,#dcdcdc,#a8a8a8,#707070);}
-.sw.googleSat{background:linear-gradient(135deg,#1a3a5c,#2b6cb0,#4a90d9); display:flex; align-items:center; justify-content:center; font-size:16px;}
-.bm-opt.unavailable{opacity:.5;}
-.bm-opt .src{color:var(--text-faint);}
 
 .field{margin-bottom:14px;}
 .field label{display:block; font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;}
@@ -680,16 +677,8 @@ svg{display:block;}
       <div class="bm-opt" data-layer="esriStreet"><div class="sw esriStreet"></div><div class="lb">Ruas<span class="src">Esri</span></div></div>
       <div class="bm-opt" data-layer="esriTerrain"><div class="sw esriTerrain"></div><div class="lb">Terreno<span class="src">Esri</span></div></div>
       <div class="bm-opt" data-layer="esriRelief"><div class="sw esriRelief"></div><div class="lb">Relevo<span class="src">Esri</span></div></div>
-      <div class="bm-opt" data-layer="googleSat" id="bmGoogle"><div class="sw googleSat">🌐</div><div class="lb">Satélite<span class="src">Google · online</span></div></div>
     </div>
-    <div class="hint">As opções acima (exceto Google) são de fontes de acesso livre, sem cadastro, e funcionam offline com download prévio. O satélite Google é opcional, exige chave própria da sua conta Google Cloud e <strong>só funciona com internet ativa</strong> — não pode ser baixado para uso offline, por exigência dos termos de uso do Google.</div>
-    <div class="divider-lbl">Google Maps (opcional)</div>
-    <div class="field">
-      <label>Chave da API do Google Maps</label>
-      <input type="password" id="cfgGoogleKey" placeholder="Cole aqui sua API key do Google Cloud" autocomplete="off">
-    </div>
-    <button class="btn secondary" id="btnSaveGoogleKey">Salvar chave</button>
-    <div class="hint">Gere sua própria chave em console.cloud.google.com, ative a "Maps JavaScript API" e vincule uma conta de faturamento (obrigatório mesmo dentro da cota gratuita). A chave fica salva só neste aparelho. Sem chave configurada, a opção "Satélite (Google)" fica indisponível. <strong>No app Android instalado</strong>, restrinja a chave por app Android (nome do pacote br.edu.uft.geocampo) somente se estiver usando o SDK nativo — como aqui o carregamento é via navegador embutido (WebView), a forma mais confiável costuma ser deixar a chave sem restrição de referenciador HTTP, controlando o uso pelo painel de cotas do Google Cloud.</div>
+    <div class="hint">Google Maps não está disponível aqui: o acesso aos tiles do Google fora da API oficial (com chave própria e conta de faturamento) viola os termos de uso do Google Maps Platform. As opções acima são todas de fontes de acesso livre e sem necessidade de cadastro.</div>
     <div class="sub" style="margin:0 0 12px 0;">Toque duas vezes no botão de camadas no mapa para alternar rapidamente entre as bases sem abrir este menu.</div>
     <div class="field">
       <label>Transparência da base atual: <span id="opacityVal">100%</span></label>
@@ -943,8 +932,7 @@ var state = {
   wakeLock: null,
   datum: 'sirgas2000',
   utmZoneOverride: null,
-  theme: 'dark',
-  googleApiKey: ''
+  theme: 'dark'
 };
 
 var STORAGE_PREFIX = 'geocampo:';
@@ -1008,7 +996,6 @@ async function loadSettings(){
       state.datum = s.datum || 'sirgas2000';
       state.utmZoneOverride = s.utmZoneOverride || null;
       state.theme = s.theme || 'dark';
-      state.googleApiKey = s.googleApiKey || '';
     }catch(e){}
   }
   el('cfgVibrate').checked = state.vibrate;
@@ -1021,7 +1008,6 @@ async function loadSettings(){
   el('cfgDatum').value = state.datum;
   el('cfgTheme').value = state.theme;
   el('cfgUtmZone').value = state.utmZoneOverride ? (state.utmZoneOverride.zone+state.utmZoneOverride.hemi) : 'auto';
-  el('cfgGoogleKey').value = state.googleApiKey;
   document.body.classList.toggle('sunlight', state.sunlight);
   document.body.classList.toggle('lefty', state.handedness==='left');
   document.body.classList.toggle('light', state.theme==='light');
@@ -1034,8 +1020,7 @@ async function saveSettings(){
     vibrate: state.vibrate, sound: state.sound, keepAwake: state.keepAwake,
     sunlight: state.sunlight, handedness: state.handedness,
     coordFormat: state.coordFormat, areaUnit: state.areaUnit,
-    datum: state.datum, utmZoneOverride: state.utmZoneOverride, theme: state.theme,
-    googleApiKey: state.googleApiKey
+    datum: state.datum, utmZoneOverride: state.utmZoneOverride, theme: state.theme
   }));
 }
 
@@ -1077,7 +1062,7 @@ async function setActiveProject(id){
 function currentProject(){ return state.projects[state.activeId]; }
 
 /* ===================== MAPA ===================== */
-var map = L.map('map', { zoomControl:false, attributionControl:true, maxZoom:22 }).setView([-11.727, -49.070], 13); // Gurupi-TO aprox.
+var map = L.map('map', { zoomControl:false, attributionControl:true, maxZoom:23 }).setView([-11.727, -49.070], 13); // Gurupi-TO aprox.
 
 var TILE_CACHE = 'geocampo-tiles-v1';
 var cacheSupported = ('caches' in window);
@@ -1115,11 +1100,11 @@ var CachedTileLayer = L.TileLayer.extend({
     return tile;
   }
 });
-// maxZoom=22 permite continuar ampliando visualmente (upscale da última imagem disponível);
+// maxZoom=23 permite continuar ampliando visualmente (upscale da última imagem disponível);
 // maxNativeZoom é o limite real de resolução de cada fonte — evita pedir tiles inexistentes ao servidor.
 function cachedTileLayer(url, opts){
   opts = opts || {};
-  opts.maxZoom = 22;
+  opts.maxZoom = 23;
   return new CachedTileLayer(url, opts);
 }
 
@@ -1156,66 +1141,6 @@ function setBaseLayer(key){
 setBaseLayer('satellite');
 L.control.scale({ metric:true, imperial:false, position:'topleft', maxWidth:120 }).addTo(map);
 
-/* ---------- Satélite Google (opcional, via Leaflet.GoogleMutant) ----------
-   Só carrega scripts do Google quando o usuário de fato tenta usar essa opção,
-   com chave própria configurada e conexão ativa. Nunca entra no cache offline. */
-var googleLoadPromise = null;
-function loadScriptOnce(src){
-  return new Promise(function(resolve, reject){
-    var s = document.createElement('script');
-    s.src = src; s.async = true;
-    s.onload = function(){ resolve(); };
-    s.onerror = function(){ reject(new Error('Falha ao carregar '+src)); };
-    document.head.appendChild(s);
-  });
-}
-function ensureGoogleLayer(){
-  if(layers.googleSat) return Promise.resolve(layers.googleSat);
-  if(googleLoadPromise) return googleLoadPromise;
-  googleLoadPromise = (async function(){
-    if(!window.google || !window.google.maps){
-      await loadScriptOnce('https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(state.googleApiKey));
-    }
-    if(!(L.gridLayer && L.gridLayer.googleMutant)){
-      await loadScriptOnce('vendor/leaflet.gridlayer.googlemutant.js');
-    }
-    layers.googleSat = L.gridLayer.googleMutant({ type:'satellite', maxZoom:22 });
-    return layers.googleSat;
-  })();
-  return googleLoadPromise;
-}
-async function trySwitchToGoogle(){
-  if(!state.googleApiKey){
-    toast('Configure sua chave do Google Maps em Camadas → Google Maps (opcional)');
-    return;
-  }
-  if(!navigator.onLine){
-    toast('Satélite do Google exige conexão com a internet');
-    return;
-  }
-  try{
-    toast('Carregando satélite do Google…', 1500);
-    var gLayer = await ensureGoogleLayer();
-    if(activeLayer) map.removeLayer(activeLayer);
-    activeLayer = gLayer;
-    activeLayer.addTo(map);
-    state.baseLayer = 'googleSat';
-    document.querySelectorAll('.bm-opt').forEach(function(o){ o.classList.toggle('sel', o.dataset.layer==='googleSat'); });
-  }catch(e){
-    toast('Não foi possível carregar o Google Maps — verifique a chave e a conexão');
-    googleLoadPromise = null;
-  }
-}
-// Se a conexão cair enquanto o satélite Google estiver ativo, volta automaticamente
-// para uma base que funciona offline, evitando mapa em branco.
-window.addEventListener('offline', function(){
-  if(state.baseLayer==='googleSat'){
-    toast('Conexão perdida — voltando para o satélite offline');
-    setBaseLayer('satellite');
-    syncLayerSheetControls();
-  }
-});
-
 /* ---------- Download de área para uso offline ---------- */
 function tileXY(lon, lat, z){
   var latRad = lat*Math.PI/180;
@@ -1231,7 +1156,6 @@ function layersForCurrentBase(){
 var downloadCancelled = false;
 async function downloadVisibleArea(){
   if(!cacheSupported){ toast('Este navegador não suporta cache de mapas offline'); return; }
-  if(state.baseLayer==='googleSat'){ toast('O satélite do Google não pode ser salvo para uso offline — troque de base antes de baixar'); return; }
   var pad = parseInt(el('cfgDownloadRange').value, 10) - 1; // 0,1,2
   var bounds = map.getBounds();
   var baseZoom = map.getZoom();
@@ -1305,7 +1229,6 @@ el('btnClearCache').addEventListener('click', async function(){
 /* ---------- Indicador online/offline ---------- */
 function updateOnlineBanner(){
   el('offlineBanner').classList.toggle('show', !navigator.onLine);
-  if(el('bmGoogle')) syncLayerSheetControls();
 }
 window.addEventListener('online', updateOnlineBanner);
 window.addEventListener('offline', updateOnlineBanner);
@@ -2374,26 +2297,12 @@ el('btnLayers').addEventListener('click', function(){
   }, 360);
 });
 document.querySelectorAll('.bm-opt').forEach(function(o){
-  o.addEventListener('click', function(){
-    if(o.dataset.layer==='googleSat'){ trySwitchToGoogle(); return; }
-    setBaseLayer(o.dataset.layer);
-    syncLayerSheetControls();
-  });
-});
-el('btnSaveGoogleKey').addEventListener('click', function(){
-  var v = el('cfgGoogleKey').value.trim();
-  state.googleApiKey = v;
-  saveSettings();
-  layers.googleSat = null; googleLoadPromise = null; // força recarregar com a nova chave
-  toast(v ? 'Chave do Google salva' : 'Chave removida');
+  o.addEventListener('click', function(){ setBaseLayer(o.dataset.layer); syncLayerSheetControls(); });
 });
 function syncLayerSheetControls(){
   el('cfgOpacity').value = Math.round((state.baseOpacity!==undefined?state.baseOpacity:1)*100);
   el('opacityVal').textContent = el('cfgOpacity').value+'%';
   el('cfgCompareWith').value = state.compareWith || '';
-  var googleReady = !!state.googleApiKey && navigator.onLine;
-  el('bmGoogle').classList.toggle('unavailable', !googleReady);
-  el('bmGoogle').querySelector('.src').textContent = !state.googleApiKey ? 'Google · sem chave' : (!navigator.onLine ? 'Google · offline' : 'Google · online');
 }
 el('cfgOpacity').addEventListener('input', function(e){
   var v = parseInt(e.target.value,10)/100;
@@ -2756,11 +2665,13 @@ function importKML(text){
 
 /* ===================== INICIALIZAÇÃO ===================== */
 async function requestNativeLocationPermission(){
+  // Dentro do app Android empacotado (Capacitor), aciona o diálogo nativo de permissão
+  // de localização do sistema antes de usar a Geolocation API padrão do navegador.
   try{
     if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation){
       await window.Capacitor.Plugins.Geolocation.requestPermissions();
     }
-  }catch(e){ }
+  }catch(e){ /* segue normalmente; o navegador ainda pode pedir permissão por conta própria */ }
 }
 async function init(){
   await loadSettings();
