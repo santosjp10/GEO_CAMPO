@@ -1,0 +1,17 @@
+{
+  "name": "geocampo",
+  "version": "1.0.0",
+  "description": "GeoCampo - Coleta de dados geoespaciais com GNSS",
+  "scripts": {
+    "sync": "npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
+    "@capacitor/geolocation": "^6.1.1",
+    "jszip": "^3.10.1",
+    "leaflet": "^1.9.4",
+    "proj4": "^2.9.0"
+  }
+}

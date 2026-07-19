@@ -1,0 +1,2652 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>GeoCampo · Coleta GNSS</title>
+<link rel="stylesheet" href="vendor/leaflet.css">
+<script src="vendor/leaflet.js"></script>
+<script src="vendor/proj4.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<style>
+:root{
+  --bg:#12161a;
+  --bg-rgb:18,22,26;
+  --panel:#1b2126;
+  --panel-rgb:27,33,38;
+  --panel-2:#212930;
+  --panel-3:#262f37;
+  --border:#2e383f;
+  --border-soft:#232b31;
+  --text:#e7ecef;
+  --text-dim:#8fa0ac;
+  --text-faint:#5c6b75;
+  --accent:#ff7a1a;
+  --accent-dim:#c96116;
+  --teal:#2dd4bf;
+  --good:#46d17a;
+  --warn:#f5b942;
+  --bad:#f0554a;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Roboto Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --radius: 14px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+body.light{
+  --bg:#eef1f3;
+  --bg-rgb:238,241,243;
+  --panel:#ffffff;
+  --panel-rgb:255,255,255;
+  --panel-2:#f6f8f9;
+  --panel-3:#eceff1;
+  --border:#d7dde1;
+  --border-soft:#e5e9eb;
+  --text:#141a1e;
+  --text-dim:#4b5760;
+  --text-faint:#78848c;
+  --teal:#0b7d72;
+  --good:#1c9a57;
+  --warn:#b9790f;
+  --bad:#d63f35;
+}
+body.sunlight:not(.light){
+  --panel:#000000; --panel-rgb:0,0,0; --panel-2:#0c0f11; --panel-3:#161b1e; --border:#4a5a63; --border-soft:#333e44;
+  --text:#ffffff; --text-dim:#c7d3d9; --text-faint:#8fa0ac;
+}
+body.sunlight.light{
+  --bg:#ffffff; --bg-rgb:255,255,255; --panel:#ffffff; --panel-rgb:255,255,255; --panel-2:#ffffff; --panel-3:#eef0f1;
+  --border:#000000; --border-soft:#444444; --text:#000000; --text-dim:#1a1a1a; --text-faint:#333333;
+  --teal:#046b60; --accent:#c9560a;
+}
+body.sunlight .icon-btn, body.sunlight .fab, body.sunlight #gnssChip, body.sunlight #projectChip{border-width:2px;}
+body.lefty #fabStack{right:auto; left:12px;}
+body.lefty #sheetMenu .sheet, body.lefty .sheet{ }
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{height:100%; margin:0; overflow:hidden; overscroll-behavior:none;}
+body{
+  font-family:var(--sans);
+  background:var(--bg);
+  color:var(--text);
+  -webkit-user-select:none; user-select:none;
+}
+#app{position:fixed; inset:0;}
+#map{position:absolute; inset:0; background:#0c0f12;}
+.leaflet-control-attribution{
+  background:rgba(var(--bg-rgb),.7) !important; color:var(--text-faint) !important; font-size:9px !important;
+}
+.leaflet-control-attribution a{color:var(--text-dim) !important;}
+.leaflet-control-scale-line{
+  background:rgba(var(--panel-rgb),.85) !important; border:1px solid var(--border) !important; color:var(--text) !important;
+  font-family:var(--mono) !important; font-size:10.5px !important; padding:1px 6px !important;
+  border-top:1px solid var(--border) !important;
+}
+.leaflet-top.leaflet-left{margin-top: calc(var(--safe-top) + 70px) !important;}
+
+/* ---------- TOP BAR ---------- */
+#topbar{
+  position:absolute; top:0; left:0; right:0;
+  padding: calc(var(--safe-top) + 10px) 12px 10px 12px;
+  display:flex; align-items:center; gap:10px;
+  background:linear-gradient(180deg, rgba(var(--bg-rgb),.85) 0%, rgba(var(--bg-rgb),0) 100%);
+  z-index:500; pointer-events:none;
+}
+#topbar > *{pointer-events:auto;}
+.icon-btn{
+  width:40px; height:40px; border-radius:12px;
+  background:rgba(var(--panel-rgb),.92); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--text); flex:none; backdrop-filter:blur(6px);
+}
+.icon-btn:active{background:var(--panel-3);}
+#projectChip{
+  flex:1; display:flex; flex-direction:column; justify-content:center;
+  background:rgba(var(--panel-rgb),.92); border:1px solid var(--border);
+  border-radius:12px; padding:6px 12px; min-width:0; backdrop-filter:blur(6px);
+}
+#projectChip .lbl{font-size:9px; letter-spacing:.08em; color:var(--text-faint); text-transform:uppercase;}
+#projectChip .nameRow{display:flex; align-items:center; gap:6px;}
+#projectChip .name{flex:1; min-width:0; font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+#projectChip .featCount{
+  flex:none; font-family:var(--mono); font-size:10px; font-weight:700; color:var(--teal);
+  background:rgba(45,212,191,.14); border-radius:8px; padding:1px 6px; line-height:1.5;
+}
+.status-dot{width:8px; height:8px; border-radius:50%; flex:none; box-shadow:0 0 6px currentColor;}
+.status-dot.good{background:var(--good); color:var(--good);}
+.status-dot.warn{background:var(--warn); color:var(--warn);}
+.status-dot.bad{background:var(--bad); color:var(--bad);}
+#gnssChip{
+  display:flex; align-items:center; gap:6px;
+  background:rgba(var(--panel-rgb),.92); border:1px solid var(--border);
+  border-radius:12px; padding:0 12px; height:40px; backdrop-filter:blur(6px);
+}
+#gnssChip .emoji{font-size:15px; line-height:1;}
+#gnssChip .txt{font-family:var(--mono); font-size:11px; color:var(--text-dim); letter-spacing:.02em; display:flex; flex-direction:column; align-items:flex-start;}
+#gnssChip .txt b{color:var(--text); font-size:11.5px; font-weight:700;}
+#gnssChip .txt small{color:var(--text-faint); font-size:9.5px;}
+
+/* ---------- FAB STACK ---------- */
+#fabStack{
+  position:absolute; right:12px; bottom: calc(var(--safe-bottom) + 210px);
+  display:flex; flex-direction:column; gap:10px; z-index:500;
+  transition:bottom .25s ease;
+}
+#fabStack.panel-collapsed{bottom: calc(var(--safe-bottom) + 96px);}
+.fab{
+  width:46px; height:46px; border-radius:50%;
+  background:rgba(var(--panel-rgb),.95); border:1px solid var(--border);
+  color:var(--text); display:flex; align-items:center; justify-content:center;
+  backdrop-filter:blur(6px);
+}
+.fab:active{background:var(--panel-3);}
+.fab.active{background:var(--teal); border-color:var(--teal); color:#08211d;}
+.fab.mini{width:40px; height:40px;}
+#fabSecondary{display:flex; flex-direction:column; gap:10px; max-height:0; overflow:hidden; opacity:0; transition:max-height .22s ease, opacity .18s ease;}
+#fabSecondary.open{max-height:220px; opacity:1;}
+
+/* ---------- CAPTURE CLUSTER ---------- */
+#captureCluster{
+  position:absolute; left:0; right:0; bottom: calc(var(--safe-bottom) + 200px);
+  display:flex; flex-direction:column; align-items:center; gap:10px; z-index:520;
+  transition:bottom .25s ease; pointer-events:none;
+}
+#captureCluster.panel-collapsed{bottom: calc(var(--safe-bottom) + 86px);}
+
+/* ---------- MODE STACK (lateral, oposta aos controles do mapa) ---------- */
+#modeStack{
+  position:absolute; left:12px; bottom: calc(var(--safe-bottom) + 210px);
+  display:flex; flex-direction:column; gap:10px; z-index:500;
+  transition:bottom .25s ease;
+}
+#modeStack.panel-collapsed{bottom: calc(var(--safe-bottom) + 96px);}
+.mode-fab{
+  width:46px; height:46px; border-radius:50%;
+  background:rgba(var(--panel-rgb),.95); border:1px solid var(--border);
+  color:var(--text-dim); display:flex; align-items:center; justify-content:center;
+  backdrop-filter:blur(6px);
+}
+.mode-fab:active{background:var(--panel-3);}
+.mode-fab.sel{background:var(--accent); border-color:var(--accent); color:#241000;}
+body.lefty #modeStack{left:auto; right:12px;}
+
+#captureRow{display:flex; align-items:center; gap:16px; pointer-events:auto;}
+#undoVertexBtn, #finishBtn{
+  width:44px; height:44px; border-radius:50%; background:rgba(var(--panel-rgb),.95); border:1px solid var(--border);
+  color:var(--text); display:none; align-items:center; justify-content:center; backdrop-filter:blur(6px);
+}
+#finishBtn{background:var(--teal); border-color:var(--teal); color:#08211d;}
+#captureBtn{
+  width:74px; height:74px; border-radius:50%;
+  background:var(--accent); border:4px solid rgba(255,122,26,.28);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 6px 20px rgba(255,122,26,.35);
+}
+#captureBtn:active{transform:scale(.94);}
+#captureBtn .ring{width:56px; height:56px; border-radius:50%; border:2.5px solid #241000; display:flex; align-items:center; justify-content:center; color:#241000; font-size:22px;}
+#vertexCount{
+  position:absolute; top:-6px; right:-6px; background:var(--teal); color:#08211d; font-family:var(--mono);
+  font-size:10px; font-weight:700; min-width:18px; height:18px; border-radius:9px; display:none;
+  align-items:center; justify-content:center; padding:0 4px; border:2px solid var(--bg);
+}
+
+/* ---------- CAPTURE CONFIRMATION FX ---------- */
+#captureFlash{
+  position:absolute; left:50%; bottom: calc(var(--safe-bottom) + 200px);
+  width:74px; height:74px; transform:translate(-50%, 50%); border-radius:50%;
+  pointer-events:none; z-index:515; opacity:0;
+}
+#captureFlash.panel-collapsed{bottom: calc(var(--safe-bottom) + 86px);}
+#captureFlash .ripple{
+  position:absolute; inset:0; border-radius:50%; border:3px solid var(--teal);
+}
+#captureFlash.fire{animation:flashFade .55s ease-out;}
+#captureFlash.fire .ripple{animation:rippleGrow .55s ease-out;}
+@keyframes rippleGrow{ from{transform:scale(.7); opacity:1;} to{transform:scale(1.9); opacity:0;} }
+@keyframes flashFade{ from{opacity:1;} to{opacity:0;} }
+#captureCheck{
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) scale(.4);
+  width:30px; height:30px; color:#08211d; opacity:0; pointer-events:none;
+}
+#captureBtn.saved #captureCheck{animation:checkPop .5s ease-out;}
+@keyframes checkPop{
+  0%{opacity:0; transform:translate(-50%,-50%) scale(.3);}
+  35%{opacity:1; transform:translate(-50%,-50%) scale(1.15);}
+  70%{opacity:1; transform:translate(-50%,-50%) scale(1);}
+  100%{opacity:0; transform:translate(-50%,-50%) scale(1);}
+}
+
+/* ---------- LIVE CALC PILL ---------- */
+#calcPill{
+  position:absolute; left:50%; transform:translateX(-50%);
+  bottom: calc(var(--safe-bottom) + 268px);
+  background:rgba(var(--panel-rgb),.95); border:1px solid var(--border); border-radius:12px;
+  padding:6px 14px; font-family:var(--mono); font-size:11.5px; color:var(--teal);
+  display:none; gap:14px; z-index:520; white-space:nowrap; backdrop-filter:blur(6px);
+  transition:bottom .25s ease;
+}
+#calcPill.panel-collapsed{bottom: calc(var(--safe-bottom) + 154px);}
+#calcPill span{color:var(--text-dim); margin-right:3px;}
+
+/* ---------- BOTTOM CONSOLE ---------- */
+#console{
+  position:absolute; left:0; right:0; bottom:0; z-index:510;
+  background:var(--panel); border-top:1px solid var(--border);
+  border-radius:18px 18px 0 0; box-shadow:0 -8px 24px rgba(0,0,0,.35);
+  padding-bottom: var(--safe-bottom);
+  transition:transform .25s ease;
+}
+#console.collapsed{transform:translateY(calc(100% - 54px));}
+#consoleHandle{
+  display:flex; align-items:center; justify-content:center; height:22px; cursor:pointer;
+}
+#consoleHandle .bar{width:34px; height:4px; border-radius:2px; background:var(--border);}
+#consoleTop{
+  display:flex; align-items:center; justify-content:space-between; padding:0 16px 8px 16px;
+}
+#consoleTop .fixLabel{display:flex; align-items:center; gap:8px; font-weight:700; font-size:13px;}
+#consoleTop .src{font-size:9.5px; color:var(--text-faint); font-family:var(--mono); letter-spacing:.05em;}
+.accbar-wrap{padding:0 16px 10px 16px;}
+.accbar-track{height:5px; border-radius:3px; background:var(--panel-3); overflow:hidden;}
+.accbar-fill{height:100%; border-radius:3px; background:linear-gradient(90deg, var(--good), var(--warn) 60%, var(--bad)); width:30%;}
+#dataGrid{
+  display:grid; grid-template-columns:1fr 1fr; gap:0; padding:0 16px 14px 16px;
+}
+.cell{padding:8px 8px 8px 0; border-bottom:1px solid var(--border-soft);}
+.cell:nth-child(odd){border-right:1px solid var(--border-soft); padding-right:12px;}
+.cell .k{font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); margin-bottom:2px;}
+.cell .v{font-family:var(--mono); font-size:14px; color:var(--text); font-variant-numeric:tabular-nums;}
+.cell .v small{color:var(--text-dim); font-size:10px;}
+#advToggle{
+  text-align:center; font-size:11px; color:var(--teal); padding:2px 0 10px 0; font-weight:600;
+}
+#advGrid{display:none; grid-template-columns:1fr 1fr; gap:0; padding:0 16px 6px 16px;}
+#advGrid.open{display:grid;}
+#advNote{font-size:9.5px; color:var(--text-faint); padding:0 16px 12px 16px; line-height:1.5;}
+
+/* ---------- EDIÇÃO DE GEOMETRIA ---------- */
+#editToolbar, #measureToolbar{
+  position:absolute; left:0; right:0; bottom: calc(var(--safe-bottom) + 16px);
+  display:none; flex-direction:column; align-items:center; gap:8px; z-index:600; padding:0 14px;
+}
+#editToolbar.show, #measureToolbar.show{display:flex;}
+#editHint, #measureHint{
+  background:rgba(var(--panel-rgb),.95); border:1px solid var(--border); border-radius:10px;
+  padding:7px 12px; font-size:11px; color:var(--text-dim); text-align:center; backdrop-filter:blur(6px);
+}
+#editActions{display:flex; gap:10px; background:rgba(var(--panel-rgb),.95); border:1px solid var(--border); border-radius:16px; padding:8px; backdrop-filter:blur(6px);}
+.edit-btn{
+  display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 12px; border-radius:10px; color:var(--text-dim); font-size:9.5px;
+}
+.edit-btn.primary{color:#08211d; background:var(--teal);}
+.edit-btn.warn{color:var(--bad);}
+.vtx-popup .leaflet-popup-content-wrapper{background:var(--panel-2); color:var(--text); border-radius:10px;}
+.vtx-popup .leaflet-popup-tip{background:var(--panel-2);}
+.vtx-popup-btns{display:flex; flex-direction:column; gap:6px; min-width:150px;}
+.vtx-popup-btns button{padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--panel-3); color:var(--text); font-size:12.5px; text-align:left;}
+.vtx-popup-btns button.danger{color:var(--bad);}
+body.editing #captureCluster, body.editing #fabStack, body.editing #modeStack,
+body.measuring #captureCluster, body.measuring #fabStack, body.measuring #modeStack{display:none;}
+
+/* ---------- BÚSSOLA ---------- */
+.compass-wrap{display:flex; flex-direction:column; align-items:center; padding:10px 0 4px 0;}
+.compass-rose{width:220px; height:220px; position:relative;}
+.compass-heading{font-family:var(--mono); font-size:34px; font-weight:700; color:var(--teal); margin-top:14px;}
+.compass-sub{font-size:11px; color:var(--text-faint); margin-top:2px;}
+.cw-ring{stroke:var(--border);}
+.cw-ring-soft{stroke:var(--border-soft);}
+.cw-label{fill:var(--text-dim);}
+.cw-label.cw-strong{fill:var(--text);}
+.cw-center{fill:var(--text);}
+.cw-tail{fill:var(--text-faint);}
+
+/* ---------- COMPARAÇÃO DE BASES ---------- */
+#compareDivider{
+  position:absolute; top:0; bottom:0; width:0; z-index:450; display:none;
+  border-left:2px solid #fff; pointer-events:none;
+}
+#compareDivider.show{display:block;}
+#compareHandle{
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:38px; height:38px; border-radius:50%;
+  background:#fff; display:flex; align-items:center; justify-content:center; pointer-events:auto; box-shadow:0 2px 8px rgba(0,0,0,.4);
+  color:#12161a; font-size:16px;
+}
+
+/* ---------- OFFLINE BANNER ---------- */
+#offlineBanner{
+  position:absolute; top:0; left:0; right:0; z-index:800; display:none;
+  padding: calc(var(--safe-top) + 6px) 14px 6px 14px; text-align:center;
+  background:linear-gradient(180deg, rgba(245,185,66,.95), rgba(245,185,66,.0));
+  font-size:11.5px; font-weight:700; color:#241a00;
+}
+#offlineBanner.show{display:block;}
+
+/* ---------- DOWNLOAD DE MAPAS OFFLINE ---------- */
+.dl-progress-wrap{display:none; margin-top:10px;}
+.dl-progress-wrap.show{display:block;}
+.dl-progress-track{height:8px; border-radius:4px; background:var(--panel-3); overflow:hidden;}
+.dl-progress-fill{height:100%; width:0%; background:var(--teal); border-radius:4px; transition:width .15s ease;}
+.dl-progress-txt{font-size:11px; color:var(--text-dim); margin-top:6px; font-family:var(--mono); text-align:center;}
+.select-chip{
+  display:inline-flex; align-items:center; gap:6px; background:var(--panel-3); border:1px solid var(--border);
+  border-radius:999px; padding:6px 12px; font-size:12px; color:var(--text-dim); margin-bottom:10px;
+}
+.select-chip.active{color:var(--teal); border-color:var(--teal);}
+.feat-check{width:18px; height:18px; border-radius:5px; border:2px solid var(--border); flex:none; display:flex; align-items:center; justify-content:center;}
+.feat-check.on{background:var(--teal); border-color:var(--teal); color:#08211d; font-size:12px; font-weight:900;}
+
+/* ---------- MODALS / SHEETS ---------- */
+.sheet-backdrop{
+  position:fixed; inset:0; background:rgba(6,8,10,.6); z-index:900; display:none;
+  align-items:flex-end; backdrop-filter:blur(2px);
+}
+.sheet-backdrop.show{display:flex;}
+.sheet{
+  width:100%; max-height:86vh; background:var(--panel); border-radius:18px 18px 0 0;
+  border-top:1px solid var(--border); padding: 14px 18px calc(18px + var(--safe-bottom)) 18px;
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+}
+.sheet h2{font-size:16px; margin:2px 0 14px 0; display:flex; align-items:center; justify-content:space-between;}
+.sheet h2 .x{color:var(--text-dim); font-size:20px; line-height:1;}
+.sheet .sub{font-size:11.5px; color:var(--text-faint); margin:-10px 0 14px 0; line-height:1.5;}
+.row-btn{
+  display:flex; align-items:center; gap:12px; padding:13px 4px; border-bottom:1px solid var(--border-soft);
+}
+.row-btn:last-child{border-bottom:none;}
+.row-btn .ic{width:34px; height:34px; border-radius:10px; background:var(--panel-3); display:flex; align-items:center; justify-content:center; flex:none; color:var(--teal);}
+.row-btn .tx{flex:1; min-width:0;}
+.row-btn .tx .t1{font-size:13.5px; font-weight:600;}
+.row-btn .tx .t2{font-size:11px; color:var(--text-faint); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.row-btn .chev{color:var(--text-faint);}
+.exp-icon-btn{width:36px; height:36px; border-radius:10px; background:var(--panel-3); border:1px solid var(--border); color:var(--teal); font-size:16px; flex:none;}
+.basemap-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:6px;}
+.bm-opt{border:2px solid var(--border); border-radius:12px; padding:10px; text-align:center; position:relative;}
+.bm-opt.sel{border-color:var(--teal);}
+.bm-opt .sw{width:100%; height:52px; border-radius:8px; margin-bottom:8px;}
+.bm-opt .lb{font-size:12px; font-weight:600;}
+.sw.sat{background:linear-gradient(135deg,#2b3d2c,#5b6b3f,#8a9163);}
+.sw.hyb{background:linear-gradient(135deg,#25322a,#4c5c3e,#7d8459); position:relative;}
+.sw.streets{background:linear-gradient(135deg,#e7ecef,#c8d0d6); }
+.sw.topo{background:linear-gradient(135deg,#e9dfc2,#c8b98a,#8ea06b);}
+
+.field{margin-bottom:14px;}
+.field label{display:block; font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;}
+.field input, .field select, .field textarea{
+  width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+  border-radius:10px; padding:11px 12px; font-size:14px; font-family:var(--sans);
+}
+.field textarea{resize:vertical; min-height:60px;}
+.attr-row{display:flex; gap:8px; margin-bottom:8px;}
+.attr-row input{flex:1;}
+.attr-row .rm{width:38px; flex:none; background:var(--panel-2); border:1px solid var(--border); border-radius:10px; color:var(--bad); font-size:16px;}
+.btn{
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  width:100%; padding:13px; border-radius:12px; font-size:14px; font-weight:700;
+  background:var(--accent); color:#241000; border:none; margin-top:6px;
+}
+.btn.secondary{background:var(--panel-3); color:var(--text); border:1px solid var(--border);}
+.btn.ghost{background:transparent; color:var(--text-dim); border:1px dashed var(--border);}
+.btn.danger{background:transparent; color:var(--bad); border:1px solid rgba(240,85,74,.4);}
+.hint{font-size:10.5px; color:var(--text-faint); line-height:1.5; margin-top:10px;}
+.proj-item{display:flex; align-items:center; gap:10px; padding:12px 4px; border-bottom:1px solid var(--border-soft);}
+.proj-item .dot{width:9px; height:9px; border-radius:50%; background:var(--border); flex:none;}
+.proj-item.active .dot{background:var(--teal); box-shadow:0 0 6px var(--teal);}
+.proj-item .tx{flex:1; min-width:0;}
+.proj-item .t1{font-size:14px; font-weight:600;}
+.proj-item .t2{font-size:11px; color:var(--text-faint); font-family:var(--mono);}
+.proj-item .del{color:var(--text-faint); font-size:18px; padding:6px;}
+.proj-item .fav{font-size:17px; padding:4px; color:var(--text-faint); flex:none;}
+.proj-item .fav.on{color:var(--warn);}
+.proj-item .dup{font-size:15px; padding:6px; color:var(--text-faint); flex:none;}
+.folder-header{font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); margin:16px 0 2px 4px; display:flex; align-items:center; gap:6px;}
+.feat-thumb{width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex:none;}
+.feat-thumb.pt{background:rgba(255,122,26,.15); color:var(--accent);}
+.feat-thumb.ln{background:rgba(45,212,191,.15); color:var(--teal);}
+.feat-thumb.pg{background:rgba(70,209,122,.15); color:var(--good);}
+.toast{
+  position:fixed; left:50%; bottom:calc(var(--safe-bottom) + 20px); transform:translateX(-50%);
+  background:var(--panel-3); border:1px solid var(--border); color:var(--text); font-size:12.5px;
+  padding:10px 16px; border-radius:10px; z-index:1200; opacity:0; transition:opacity .2s, bottom .2s;
+  pointer-events:none; max-width:86vw; text-align:center;
+}
+.toast.show{opacity:1;}
+.divider-lbl{font-size:10px; letter-spacing:.08em; color:var(--text-faint); text-transform:uppercase; margin:16px 0 4px 4px;}
+.file-input-wrap{position:relative; overflow:hidden;}
+.file-input-wrap input[type=file]{position:absolute; inset:0; opacity:0;}
+svg{display:block;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+  <div id="offlineBanner">📡 Modo offline — exibindo mapas baixados e dados locais</div>
+
+  <!-- TOP BAR -->
+  <div id="topbar">
+    <button class="icon-btn" id="btnMenu" title="Projetos">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div id="projectChip">
+      <div class="lbl">Projeto</div>
+      <div class="nameRow">
+        <div class="name" id="projectNameTop">Carregando…</div>
+        <div class="featCount" id="projectFeatCount" title="Feições neste projeto">0</div>
+      </div>
+    </div>
+    <button id="gnssChip" title="Toque para ver detalhes técnicos">
+      <span class="emoji" id="topEmoji">🔴</span>
+      <span class="txt"><b id="topFixTxt">Sem sinal</b><small id="topFixAcc">—</small></span>
+    </button>
+  </div>
+
+  <!-- LIVE CALC -->
+  <div id="calcPill"></div>
+  <div id="captureFlash"><div class="ripple"></div></div>
+
+  <!-- MODE STACK (lateral) -->
+  <div id="modeStack">
+    <button class="mode-btn mode-fab sel" data-mode="point" title="Ponto">
+      <svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg>
+    </button>
+    <button class="mode-btn mode-fab" data-mode="line" title="Linha">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="5" cy="18" r="2" fill="currentColor" stroke="none"/><circle cx="19" cy="6" r="2" fill="currentColor" stroke="none"/><line x1="5" y1="18" x2="19" y2="6"/></svg>
+    </button>
+    <button class="mode-btn mode-fab" data-mode="polygon" title="Polígono">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><polygon points="12,3 21,9 18,20 6,20 3,9" fill="currentColor" fill-opacity=".18"/></svg>
+    </button>
+  </div>
+
+  <!-- CAPTURE CLUSTER -->
+  <div id="captureCluster">
+    <div id="captureRow">
+      <button id="undoVertexBtn" title="Desfazer último vértice">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+      </button>
+      <button id="captureBtn" title="Registrar">
+        <div class="ring" id="captureIcon">
+          <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg>
+        </div>
+        <div id="vertexCount">0</div>
+        <svg id="captureCheck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+      </button>
+      <button id="finishBtn" title="Finalizar">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- SIDE FABS -->
+  <div id="fabStack">
+    <button class="fab" id="btnTools" title="Ferramentas">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.7 6.3 3 3L7 20H4v-3z"/><path d="m17.7 3.3 3 3-2 2-3-3z"/></svg>
+    </button>
+    <button class="fab" id="btnLayers" title="Camadas">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12,3 21,8 12,13 3,8"/><polyline points="3,14 12,19 21,14"/></svg>
+    </button>
+    <button class="fab" id="btnCenter" title="Centralizar">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="8"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/></svg>
+    </button>
+    <div id="fabSecondary">
+      <button class="fab mini" id="btnZoomIn" title="Aumentar zoom">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="fab mini" id="btnZoomOut" title="Diminuir zoom">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="fab mini" id="btnSettings" title="Configurações">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+    <button class="fab" id="btnMore" title="Mais opções">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="5" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"/></svg>
+    </button>
+  </div>
+
+  <!-- MEASURE TOOLBAR -->
+  <div id="measureToolbar">
+    <div id="measureHint">Toque no mapa para adicionar pontos de medição</div>
+    <div id="editActions">
+      <button class="edit-btn warn" id="btnMeasureClose"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>Fechar</button>
+      <button class="edit-btn" id="btnMeasureUndo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Desfazer</button>
+      <button class="edit-btn primary" id="btnMeasureClear"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>Limpar</button>
+    </div>
+  </div>
+
+  <!-- EDIT TOOLBAR -->
+  <div id="editToolbar">
+    <div id="editHint">Arraste os pontos para mover • toque nos pontos claros para inserir • toque num vértice para mais opções</div>
+    <div id="editActions">
+      <button class="edit-btn warn" id="btnEditCancel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>Cancelar</button>
+      <button class="edit-btn" id="btnEditReverse"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11l-3-3"/><path d="M17 17H6l3 3"/></svg>Inverter</button>
+      <button class="edit-btn primary" id="btnEditDone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Concluir</button>
+    </div>
+  </div>
+
+  <!-- BOTTOM CONSOLE -->
+  <div id="console">
+    <div id="consoleHandle"><div class="bar"></div></div>
+    <div id="consoleTop">
+      <div class="fixLabel"><span class="status-dot bad" id="consoleDot"></span><span id="consoleFixTxt">Sem sinal GNSS</span></div>
+      <span class="src" id="consoleSrc">FONTE: —</span>
+    </div>
+    <div class="accbar-wrap">
+      <div class="accbar-track"><div class="accbar-fill" id="accBarFill"></div></div>
+    </div>
+    <div id="dataGrid">
+      <div class="cell"><div class="k">Latitude</div><div class="v" id="dLat">—</div></div>
+      <div class="cell"><div class="k">Longitude</div><div class="v" id="dLon">—</div></div>
+      <div class="cell"><div class="k">UTM Este</div><div class="v" id="dUtmE">—</div></div>
+      <div class="cell"><div class="k">UTM Norte</div><div class="v" id="dUtmN">—</div></div>
+      <div class="cell"><div class="k">Zona UTM</div><div class="v" id="dZone">—</div></div>
+      <div class="cell"><div class="k">Altitude (elipsoidal)</div><div class="v" id="dAlt">—</div></div>
+      <div class="cell"><div class="k">Precisão horiz.</div><div class="v" id="dHAcc">—</div></div>
+      <div class="cell"><div class="k">Precisão vert.</div><div class="v" id="dVAcc">—</div></div>
+    </div>
+    <div id="advToggle">Ver estimativas avançadas (satélites, HDOP) ▾</div>
+    <div id="advGrid">
+      <div class="cell"><div class="k">Satélites (est.)</div><div class="v" id="dSats">—</div></div>
+      <div class="cell"><div class="k">HDOP (est.)</div><div class="v" id="dHdop">—</div></div>
+    </div>
+    <div id="advNote" style="display:none;">Estimativa aproximada calculada a partir da precisão reportada pelo sistema — o navegador não expõe dados brutos de satélites.</div>
+  </div>
+
+  <div id="compareDivider"><div id="compareHandle">↔</div></div>
+</div>
+
+<!-- ===== SHEET: MENU / PROJETOS ===== -->
+<div class="sheet-backdrop" id="sheetMenu">
+  <div class="sheet">
+    <h2>Menu <span class="x" data-close>&times;</span></h2>
+    <div class="row-btn" id="rowProjects">
+      <div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+      <div class="tx"><div class="t1">Projetos</div><div class="t2" id="projSummary">—</div></div>
+      <div class="chev">›</div>
+    </div>
+    <div class="row-btn" id="rowFeatures">
+      <div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+      <div class="tx"><div class="t1">Feições coletadas</div><div class="t2" id="featSummary">0 feições</div></div>
+      <div class="chev">›</div>
+    </div>
+    <div class="row-btn" id="rowExport">
+      <div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg></div>
+      <div class="tx"><div class="t1">Exportar dados</div><div class="t2">GeoJSON, KML, KMZ, GPX, CSV, DXF</div></div>
+      <div class="chev">›</div>
+    </div>
+    <div class="row-btn" id="rowImport">
+      <div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21V8"/><path d="m7 13 5-5 5 5"/><path d="M5 3h14"/></svg></div>
+      <div class="tx"><div class="t1">Importar arquivo</div><div class="t2">GeoJSON, KML, GPX, CSV</div></div>
+      <div class="chev">›</div>
+    </div>
+    <div class="row-btn" id="rowBackup">
+      <div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+      <div class="tx"><div class="t1">Backup de todos os projetos</div><div class="t2">Salvar ou restaurar tudo de uma vez</div></div>
+      <div class="chev">›</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SHEET: FERRAMENTAS ===== -->
+<div class="sheet-backdrop" id="sheetTools">
+  <div class="sheet">
+    <h2>Ferramentas cartográficas <span class="x" data-close>&times;</span></h2>
+    <div class="row-btn" id="rowMeasureDist">
+      <div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19 19 4"/><path d="m7 16 2 2"/><path d="m11 12 2 2"/><path d="m15 8 2 2"/></svg></div>
+      <div class="tx"><div class="t1">Medir distância</div><div class="t2">Toque no mapa para marcar pontos • mostra azimute</div></div>
+      <div class="chev">›</div>
+    </div>
+    <div class="row-btn" id="rowMeasureArea">
+      <div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12,3 21,9 18,20 6,20 3,9" fill="currentColor" fill-opacity=".15"/></svg></div>
+      <div class="tx"><div class="t1">Medir área</div><div class="t2">Desenha um polígono temporário no mapa</div></div>
+      <div class="chev">›</div>
+    </div>
+    <div class="row-btn" id="rowCompass">
+      <div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polygon points="12,7 14,12 12,17 10,12" fill="currentColor"/></svg></div>
+      <div class="tx"><div class="t1">Bússola</div><div class="t2">Rumo atual do aparelho</div></div>
+      <div class="chev">›</div>
+    </div>
+    <div class="hint">Coordenadas de qualquer ponto: toque e segure em qualquer lugar do mapa para ver latitude/longitude e UTM daquele local. A barra de escala fica sempre visível no canto inferior esquerdo do mapa.</div>
+  </div>
+</div>
+
+<!-- ===== SHEET: BÚSSOLA ===== -->
+<div class="sheet-backdrop" id="sheetCompass">
+  <div class="sheet">
+    <h2>Bússola <span class="x" data-close>&times;</span></h2>
+    <div class="compass-wrap">
+      <svg class="compass-rose" viewBox="0 0 220 220">
+        <circle cx="110" cy="110" r="100" fill="none" class="cw-ring" stroke-width="2"/>
+        <circle cx="110" cy="110" r="72" fill="none" class="cw-ring cw-ring-soft" stroke-width="1"/>
+        <text x="110" y="26" class="cw-label cw-strong" font-size="16" font-weight="700" text-anchor="middle">N</text>
+        <text x="194" y="115" class="cw-label" font-size="13" text-anchor="middle">L</text>
+        <text x="110" y="200" class="cw-label" font-size="13" text-anchor="middle">S</text>
+        <text x="26" y="115" class="cw-label" font-size="13" text-anchor="middle">O</text>
+        <g id="compassNeedle" transform="rotate(0 110 110)">
+          <polygon points="110,30 120,110 110,130 100,110" fill="#ff7a1a"/>
+          <polygon points="110,190 120,110 110,130 100,110" class="cw-tail"/>
+        </g>
+        <circle cx="110" cy="110" r="6" class="cw-center"/>
+      </svg>
+      <div class="compass-heading" id="compassHeadingTxt">—°</div>
+      <div class="compass-sub" id="compassSubTxt">Aguardando sensor de orientação…</div>
+    </div>
+    <div class="hint">O rumo usa o magnetômetro do aparelho e pode sofrer interferência perto de metais, veículos ou estruturas — para uso topográfico fino, confirme com outra referência. Em alguns modelos é necessário mover o celular em "8" para calibrar.</div>
+  </div>
+</div>
+
+<!-- ===== SHEET: BACKUP ===== -->
+<div class="sheet-backdrop" id="sheetBackup">
+  <div class="sheet">
+    <h2>Backup de projetos <span class="x" data-close>&times;</span></h2>
+    <div class="sub">Salva todos os projetos e feições num único arquivo — útil para trocar de aparelho ou manter uma cópia de segurança.</div>
+    <button class="btn secondary" id="btnBackupExport">⬇ Baixar backup completo (.json)</button>
+    <div class="divider-lbl">Restaurar</div>
+    <div class="file-input-wrap btn secondary" style="text-align:center;">
+      Escolher arquivo de backup…
+      <input type="file" id="backupFileInput" accept=".json">
+    </div>
+    <div class="hint">Restaurar adiciona os projetos do backup aos já existentes neste aparelho (não apaga nada). Projetos com o mesmo nome viram cópias separadas.</div>
+  </div>
+</div>
+
+<!-- ===== SHEET: PROJETOS ===== -->
+<div class="sheet-backdrop" id="sheetProjects">
+  <div class="sheet">
+    <h2>Projetos <span class="x" data-close>&times;</span></h2>
+    <div class="field" style="margin-bottom:10px;"><input id="projectSearch" placeholder="🔎 Buscar projeto por nome ou pasta…"></div>
+    <div id="projectList"></div>
+    <button class="btn secondary" id="btnNewProject" style="margin-top:14px;">+ Novo projeto</button>
+  </div>
+</div>
+
+<!-- ===== SHEET: LAYERS ===== -->
+<div class="sheet-backdrop" id="sheetLayers">
+  <div class="sheet">
+    <h2>Mapa base <span class="x" data-close>&times;</span></h2>
+    <div class="basemap-grid">
+      <div class="bm-opt" data-layer="satellite"><div class="sw sat"></div><div class="lb">Satélite</div></div>
+      <div class="bm-opt" data-layer="hybrid"><div class="sw hyb"></div><div class="lb">Híbrido</div></div>
+      <div class="bm-opt" data-layer="streets"><div class="sw streets"></div><div class="lb">Ruas</div></div>
+      <div class="bm-opt" data-layer="topo"><div class="sw topo"></div><div class="lb">Topográfico</div></div>
+    </div>
+    <div class="sub" style="margin:0 0 12px 0;">Toque duas vezes no botão de camadas no mapa para alternar rapidamente entre as 4 bases sem abrir este menu.</div>
+    <div class="field">
+      <label>Transparência da base atual: <span id="opacityVal">100%</span></label>
+      <input type="range" id="cfgOpacity" min="20" max="100" value="100" style="width:100%;">
+    </div>
+    <div class="divider-lbl">Comparar bases</div>
+    <div class="field">
+      <label>Comparar com</label>
+      <select id="cfgCompareWith">
+        <option value="">Desativado</option>
+        <option value="satellite">Satélite</option>
+        <option value="streets">Ruas</option>
+        <option value="topo">Topográfico</option>
+      </select>
+    </div>
+    <div class="hint">Ativa uma linha divisória arrastável no mapa: de um lado a base atual, do outro a base escolhida — útil para comparar imagem de satélite com traçado de ruas, por exemplo.</div>
+    <div class="divider-lbl">Uso offline</div>
+    <div class="field">
+      <label>Abrangência do download (a partir do zoom atual)</label>
+      <select id="cfgDownloadRange">
+        <option value="1">Só a área visível</option>
+        <option value="2" selected>Área visível + 1 nível de zoom</option>
+        <option value="3">Área visível + 2 níveis de zoom</option>
+      </select>
+    </div>
+    <button class="btn secondary" id="btnDownloadArea">⬇ Baixar mapa da área visível</button>
+    <div class="dl-progress-wrap" id="dlProgressWrap">
+      <div class="dl-progress-track"><div class="dl-progress-fill" id="dlProgressFill"></div></div>
+      <div class="dl-progress-txt" id="dlProgressTxt">—</div>
+    </div>
+    <div class="hint" id="cacheInfo">Verificando mapas já baixados…</div>
+    <button class="btn danger" id="btnClearCache" style="margin-top:8px;">Apagar mapas baixados</button>
+    <div class="hint">Aproxime o mapa da região exata de trabalho antes de baixar — quanto maior a área e mais níveis de zoom, mais tempo e espaço o download usa. Após baixado, a área fica disponível mesmo sem internet, nesta camada de mapa base selecionada.</div>
+  </div>
+</div>
+
+<!-- ===== SHEET: ATRIBUTOS (nova feição) ===== -->
+<div class="sheet-backdrop" id="sheetAttrs">
+  <div class="sheet">
+    <h2 id="attrTitle">Nova feição <span class="x" data-close>&times;</span></h2>
+    <div class="field"><label>Nome / identificador</label><input id="attrName" placeholder="Ex.: Talhão 03, Marco P1…"></div>
+    <div class="field"><label>Observações</label><textarea id="attrNotes" placeholder="Descrição, cultura, uso do solo…"></textarea></div>
+    <div class="divider-lbl">Atributos personalizados</div>
+    <div id="attrRows"></div>
+    <button class="btn ghost" id="btnAddAttrRow">+ adicionar atributo</button>
+    <button class="btn" id="btnSaveFeature" style="margin-top:18px;">Salvar feição</button>
+    <button class="btn secondary" id="btnCancelFeature">Cancelar</button>
+  </div>
+</div>
+
+<!-- ===== SHEET: FEIÇÕES ===== -->
+<div class="sheet-backdrop" id="sheetFeatures">
+  <div class="sheet">
+    <h2>Feições do projeto <span class="x" data-close>&times;</span></h2>
+    <div class="select-chip" id="btnToggleSelect">☑ Selecionar linhas para unir</div>
+    <div id="featureList"></div>
+    <button class="btn secondary" id="btnMergeLines" style="display:none;">Unir linhas selecionadas</button>
+  </div>
+</div>
+
+<!-- ===== SHEET: DETALHE DE FEIÇÃO ===== -->
+<div class="sheet-backdrop" id="sheetFeatureDetail">
+  <div class="sheet">
+    <h2 id="fdTitle">Feição <span class="x" data-close>&times;</span></h2>
+    <div id="fdBody"></div>
+    <button class="btn secondary" id="btnEditGeometry">✏ Editar geometria (mover / inserir / apagar vértice)</button>
+    <button class="btn danger" id="btnDeleteFeature" style="margin-top:8px;">Excluir feição</button>
+  </div>
+</div>
+
+<!-- ===== SHEET: EXPORT ===== -->
+<div class="sheet-backdrop" id="sheetExport">
+  <div class="sheet">
+    <h2>Exportar projeto <span class="x" data-close>&times;</span></h2>
+    <div class="sub">Toque no formato para baixar, ou no ícone de compartilhar para enviar direto pelo WhatsApp, Google Drive, Gmail ou outro app instalado.</div>
+    <div class="row-btn" data-exp="geojson"><div class="ic">GJ</div><div class="tx"><div class="t1">GeoJSON</div><div class="t2">Formato universal, todas as geometrias e atributos</div></div><button class="exp-icon-btn" data-action="share" title="Compartilhar">⇪</button></div>
+    <div class="row-btn" data-exp="kml"><div class="ic">KML</div><div class="tx"><div class="t1">KML</div><div class="t2">Google Earth</div></div><button class="exp-icon-btn" data-action="share" title="Compartilhar">⇪</button></div>
+    <div class="row-btn" data-exp="kmz"><div class="ic">KMZ</div><div class="tx"><div class="t1">KMZ</div><div class="t2">KML compactado</div></div><button class="exp-icon-btn" data-action="share" title="Compartilhar">⇪</button></div>
+    <div class="row-btn" data-exp="gpx"><div class="ic">GPX</div><div class="tx"><div class="t1">GPX</div><div class="t2">Waypoints e tracks (GPS)</div></div><button class="exp-icon-btn" data-action="share" title="Compartilhar">⇪</button></div>
+    <div class="row-btn" data-exp="csv"><div class="ic">CSV</div><div class="tx"><div class="t1">CSV</div><div class="t2">Tabela de vértices (lat/lon/alt)</div></div><button class="exp-icon-btn" data-action="share" title="Compartilhar">⇪</button></div>
+    <div class="row-btn" data-exp="dxf"><div class="ic">DXF</div><div class="tx"><div class="t1">DXF</div><div class="t2">CAD, coordenadas UTM</div></div><button class="exp-icon-btn" data-action="share" title="Compartilhar">⇪</button></div>
+    <div class="hint">Shapefile (.shp) e GeoPackage (.gpkg) são formatos binários complexos que não podem ser gerados com segurança dentro do navegador. Exporte em GeoJSON e converta com QGIS, GDAL/ogr2ogr ou <span style="color:var(--text-dim)">mapshaper.org</span> — a conversão é direta e sem perda de dados. O QGIS Desktop não aparece como destino de compartilhamento direto do Android; envie o arquivo por Drive/Gmail e abra por lá.</div>
+  </div>
+</div>
+
+<!-- ===== SHEET: IMPORT ===== -->
+<div class="sheet-backdrop" id="sheetImport">
+  <div class="sheet">
+    <h2>Importar arquivo <span class="x" data-close>&times;</span></h2>
+    <div class="sub">Suportado: .geojson / .json, .kml, .gpx, .csv (colunas lat/lon ou latitude/longitude). Os dados serão adicionados ao projeto ativo.</div>
+    <div class="file-input-wrap btn secondary" style="text-align:center;">
+      Escolher arquivo…
+      <input type="file" id="fileInput" accept=".geojson,.json,.kml,.gpx,.csv">
+    </div>
+  </div>
+</div>
+
+<!-- ===== SHEET: CONFIGURAÇÕES ===== -->
+<div class="sheet-backdrop" id="sheetSettings">
+  <div class="sheet">
+    <h2>Configurações <span class="x" data-close>&times;</span></h2>
+    <div class="divider-lbl">Aparência</div>
+    <div class="field">
+      <label>Tema da interface</label>
+      <select id="cfgTheme">
+        <option value="dark">Escuro</option>
+        <option value="light">Claro</option>
+      </select>
+    </div>
+    <div class="divider-lbl">Experiência de coleta</div>
+    <div class="row-btn">
+      <div class="ic">🔔</div>
+      <div class="tx"><div class="t1">Vibrar ao capturar</div><div class="t2">Confirma cada vértice/ponto pelo toque</div></div>
+      <input type="checkbox" id="cfgVibrate" checked style="width:20px; height:20px; accent-color:var(--teal);">
+    </div>
+    <div class="row-btn">
+      <div class="ic">🔊</div>
+      <div class="tx"><div class="t1">Som ao capturar</div><div class="t2">Bipe curto de confirmação (opcional)</div></div>
+      <input type="checkbox" id="cfgSound" style="width:20px; height:20px; accent-color:var(--teal);">
+    </div>
+    <div class="row-btn">
+      <div class="ic">🔆</div>
+      <div class="tx"><div class="t1">Manter tela ligada</div><div class="t2" id="wakeLockStatus">Impede que o celular apague a tela em campo</div></div>
+      <input type="checkbox" id="cfgKeepAwake" checked style="width:20px; height:20px; accent-color:var(--teal);">
+    </div>
+    <div class="row-btn">
+      <div class="ic">☀️</div>
+      <div class="tx"><div class="t1">Modo alto contraste (sol forte)</div><div class="t2">Reforça o contraste do tema atual para visibilidade externa</div></div>
+      <input type="checkbox" id="cfgSunlight" style="width:20px; height:20px; accent-color:var(--teal);">
+    </div>
+    <div class="field" style="margin-top:14px;">
+      <label>Mão dominante (posição dos botões)</label>
+      <select id="cfgHand"><option value="right">Destro — botões à direita</option><option value="left">Canhoto — botões à esquerda</option></select>
+    </div>
+    <div class="divider-lbl">Exibição</div>
+    <div class="field">
+      <label>Formato de coordenadas em destaque</label>
+      <select id="cfgCoordFormat"><option value="geo">Geográficas (graus decimais)</option><option value="utm">UTM</option></select>
+    </div>
+    <div class="field">
+      <label>Unidade de área</label>
+      <select id="cfgAreaUnit"><option value="auto">Automática (m² / ha)</option><option value="m2">Sempre m²</option><option value="ha">Sempre hectares</option></select>
+    </div>
+    <div class="field">
+      <label>Datum / Sistema de referência</label>
+      <select id="cfgDatum">
+        <option value="sirgas2000">SIRGAS 2000 (referencial oficial do Brasil)</option>
+        <option value="wgs84">WGS 84 (padrão internacional GNSS)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Fuso UTM</label>
+      <select id="cfgUtmZone">
+        <option value="auto">Automático (baseado na posição atual)</option>
+        <option value="18N">18 N</option>
+        <option value="19N">19 N</option>
+        <option value="20N">20 N</option>
+        <option value="21N">21 N</option>
+        <option value="22N">22 N</option>
+        <option value="17S">17 S</option>
+        <option value="18S">18 S</option>
+        <option value="19S">19 S</option>
+        <option value="20S">20 S</option>
+        <option value="21S">21 S</option>
+        <option value="22S">22 S</option>
+        <option value="23S">23 S</option>
+        <option value="24S">24 S</option>
+        <option value="25S">25 S</option>
+      </select>
+    </div>
+    <div class="hint">SIRGAS 2000 é o referencial oficial adotado no Brasil (Decreto nº 5.334/2004) e cobre todos os fusos UTM do país (17S a 25S, e 18N a 22N no extremo norte). Na prática, para a precisão de um GNSS de smartphone, SIRGAS 2000 e WGS 84 coincidem — a diferença entre eles é de poucos centímetros, bem abaixo do erro típico do sensor. Esta escolha define o rótulo do referencial e o fuso usado nas coordenadas UTM exibidas e nos arquivos exportados; use "Automático" para o app calcular o fuso a partir da posição atual, ou fixe manualmente se for trabalhar perto da divisa entre dois fusos.</div>
+    <div class="divider-lbl">Sobre a precisão exibida</div>
+    <div class="hint">
+      🟢 Alta (≤5 m) · 🟡 Boa (5–15 m) · 🟠 Moderada (15–30 m) · 🔴 Baixa (>30 m) — classificação direta da precisão horizontal reportada pelo GNSS do aparelho, para leitura rápida em campo. Este app usa a geolocalização do sistema Android (GNSS + Wi-Fi + rede); contagem de satélites e HDOP <strong>não são expostos pelos navegadores</strong> e aparecem apenas como estimativa avançada opcional, não substituindo um receptor GNSS dedicado (RTK/PPK).
+    </div>
+    <div class="divider-lbl">Armazenamento</div>
+    <div class="hint">Todos os projetos e feições ficam salvos neste dispositivo/conta e funcionam sem internet. A sincronização é opcional, feita manualmente por exportação/importação de arquivos.</div>
+    <div class="divider-lbl">Sobre o aplicativo</div>
+    <div class="hint">GeoCampo é uma iniciativa de <strong>Jacinto Pereira Santos</strong>, professor do curso de Agronomia da Universidade Federal do Tocantins (UFT). Contato: santosjp@uft.edu.br</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* Polyfill de window.storage (API exclusiva do ambiente Claude Artifacts) usando
+   localStorage, para que o app funcione normalmente como aplicativo Android standalone. */
+if(!window.storage){
+  window.storage = {
+    get: function(key){
+      return new Promise(function(resolve, reject){
+        var v = localStorage.getItem(key);
+        if(v===null){ reject(new Error('key not found: '+key)); return; }
+        resolve({ key:key, value:v, shared:false });
+      });
+    },
+    set: function(key, value){
+      return new Promise(function(resolve, reject){
+        try{ localStorage.setItem(key, value); resolve({ key:key, value:value, shared:false }); }
+        catch(e){ reject(e); }
+      });
+    },
+    delete: function(key){
+      return new Promise(function(resolve){
+        localStorage.removeItem(key);
+        resolve({ key:key, deleted:true, shared:false });
+      });
+    },
+    list: function(prefix){
+      return new Promise(function(resolve){
+        var keys = [];
+        for(var i=0;i<localStorage.length;i++){
+          var k = localStorage.key(i);
+          if(k && (!prefix || k.indexOf(prefix)===0)) keys.push(k);
+        }
+        resolve({ keys:keys, prefix:prefix, shared:false });
+      });
+    }
+  };
+}
+
+/* ===================== ESTADO ===================== */
+var state = {
+  projects: {},          // id -> {id,name,createdAt,features:[]}
+  activeId: null,
+  baseLayer: 'satellite',
+  mode: 'point',
+  drafting: false,
+  draftCoords: [],        // [ [lon,lat,alt], ... ]
+  draftMarkers: [],
+  lastFix: null,          // {lat,lon,alt,acc,vacc,ts}
+  simulated: false,
+  coordFormat: 'geo',
+  areaUnit: 'auto',
+  selectedFeatureId: null,
+  storageOK: true,
+  vibrate: true,
+  sound: false,
+  keepAwake: true,
+  sunlight: false,
+  handedness: 'right',
+  audioCtx: null,
+  wakeLock: null,
+  datum: 'sirgas2000',
+  utmZoneOverride: null,
+  theme: 'dark'
+};
+
+var STORAGE_PREFIX = 'geocampo:';
+
+/* ===================== UTIL ===================== */
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function el(id){ return document.getElementById(id); }
+function toast(msg, ms){
+  var t = el('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(function(){ t.classList.remove('show'); }, ms||2200);
+}
+function fmt(n, d){ if(n===null||n===undefined||isNaN(n)) return '—'; return Number(n).toFixed(d===undefined?2:d); }
+function openSheet(id){ el(id).classList.add('show'); }
+function closeSheet(id){ el(id).classList.remove('show'); }
+document.querySelectorAll('[data-close]').forEach(function(b){
+  b.addEventListener('click', function(){ b.closest('.sheet-backdrop').classList.remove('show'); });
+});
+document.querySelectorAll('.sheet-backdrop').forEach(function(bd){
+  bd.addEventListener('click', function(e){ if(e.target===bd) bd.classList.remove('show'); });
+});
+
+/* ===================== ARMAZENAMENTO ===================== */
+async function storageGet(key){
+  try{
+    if(!window.storage) throw new Error('no storage');
+    var r = await window.storage.get(STORAGE_PREFIX+key, false);
+    return r ? r.value : null;
+  }catch(e){ return null; }
+}
+async function storageSet(key, value){
+  try{
+    if(!window.storage) throw new Error('no storage');
+    await window.storage.set(STORAGE_PREFIX+key, value, false);
+    return true;
+  }catch(e){ state.storageOK=false; return false; }
+}
+async function storageDelete(key){
+  try{ if(window.storage) await window.storage.delete(STORAGE_PREFIX+key, false); }catch(e){}
+}
+async function storageListKeys(prefix){
+  try{
+    if(!window.storage) throw new Error('no storage');
+    var r = await window.storage.list(STORAGE_PREFIX+prefix, false);
+    return r ? r.keys : [];
+  }catch(e){ return []; }
+}
+
+async function loadSettings(){
+  var raw = await storageGet('meta:settings');
+  if(raw){
+    try{
+      var s = JSON.parse(raw);
+      state.vibrate = s.vibrate!==undefined ? s.vibrate : true;
+      state.sound = s.sound!==undefined ? s.sound : false;
+      state.keepAwake = s.keepAwake!==undefined ? s.keepAwake : true;
+      state.sunlight = s.sunlight!==undefined ? s.sunlight : false;
+      state.handedness = s.handedness || 'right';
+      state.coordFormat = s.coordFormat || 'geo';
+      state.areaUnit = s.areaUnit || 'auto';
+      state.datum = s.datum || 'sirgas2000';
+      state.utmZoneOverride = s.utmZoneOverride || null;
+      state.theme = s.theme || 'dark';
+    }catch(e){}
+  }
+  el('cfgVibrate').checked = state.vibrate;
+  el('cfgSound').checked = state.sound;
+  el('cfgKeepAwake').checked = state.keepAwake;
+  el('cfgSunlight').checked = state.sunlight;
+  el('cfgHand').value = state.handedness;
+  el('cfgCoordFormat').value = state.coordFormat;
+  el('cfgAreaUnit').value = state.areaUnit;
+  el('cfgDatum').value = state.datum;
+  el('cfgTheme').value = state.theme;
+  el('cfgUtmZone').value = state.utmZoneOverride ? (state.utmZoneOverride.zone+state.utmZoneOverride.hemi) : 'auto';
+  document.body.classList.toggle('sunlight', state.sunlight);
+  document.body.classList.toggle('lefty', state.handedness==='left');
+  document.body.classList.toggle('light', state.theme==='light');
+  if(!('wakeLock' in navigator)){
+    el('wakeLockStatus').textContent = 'Não suportado neste navegador — desative o desligamento automático da tela nas configurações do Android.';
+  }
+}
+async function saveSettings(){
+  await storageSet('meta:settings', JSON.stringify({
+    vibrate: state.vibrate, sound: state.sound, keepAwake: state.keepAwake,
+    sunlight: state.sunlight, handedness: state.handedness,
+    coordFormat: state.coordFormat, areaUnit: state.areaUnit,
+    datum: state.datum, utmZoneOverride: state.utmZoneOverride, theme: state.theme
+  }));
+}
+
+async function loadAllProjects(){
+  var keys = await storageListKeys('project:');
+  var found = false;
+  for(var i=0;i<keys.length;i++){
+    var raw = await storageGet(keys[i].replace(STORAGE_PREFIX,''));
+    if(raw){
+      try{
+        var p = JSON.parse(raw);
+        state.projects[p.id] = p;
+        found = true;
+      }catch(e){}
+    }
+  }
+  if(!found){
+    var p0 = { id: uid(), name:'Projeto de campo 1', createdAt: Date.now(), features: [] };
+    state.projects[p0.id] = p0;
+    await storageSet('project:'+p0.id, JSON.stringify(p0));
+    state.activeId = p0.id;
+  }
+  var activeSaved = await storageGet('meta:activeId');
+  if(activeSaved && state.projects[activeSaved]) state.activeId = activeSaved;
+  else if(!state.activeId) state.activeId = Object.keys(state.projects)[0];
+}
+async function persistProject(id){
+  var p = state.projects[id];
+  if(!p) return;
+  await storageSet('project:'+id, JSON.stringify(p));
+}
+async function setActiveProject(id){
+  state.activeId = id;
+  await storageSet('meta:activeId', id);
+  renderProjectTop();
+  redrawFeatures();
+}
+
+function currentProject(){ return state.projects[state.activeId]; }
+
+/* ===================== MAPA ===================== */
+var map = L.map('map', { zoomControl:false, attributionControl:true }).setView([-11.727, -49.070], 13); // Gurupi-TO aprox.
+
+var TILE_CACHE = 'geocampo-tiles-v1';
+var cacheSupported = ('caches' in window);
+
+var CachedTileLayer = L.TileLayer.extend({
+  createTile: function(coords, done){
+    var tile = document.createElement('img');
+    tile.setAttribute('role','presentation');
+    var url = this.getTileUrl(coords);
+    if(!cacheSupported){
+      tile.onload = function(){ done(null, tile); };
+      tile.onerror = function(e){ done(e, tile); };
+      tile.src = url;
+      return tile;
+    }
+    caches.open(TILE_CACHE).then(function(cache){
+      function fromCache(){
+        cache.match(url).then(function(res){
+          if(res){ res.blob().then(function(b){ tile.onload=function(){done(null,tile);}; tile.src = URL.createObjectURL(b); }); }
+          else{ done(null, tile); }
+        });
+      }
+      if(navigator.onLine){
+        fetch(url).then(function(resp){
+          if(resp && resp.ok){ cache.put(url, resp.clone()); return resp.blob(); }
+          throw new Error('http '+ (resp&&resp.status));
+        }).then(function(blob){
+          tile.onload = function(){ done(null, tile); };
+          tile.src = URL.createObjectURL(blob);
+        }).catch(fromCache);
+      }else{
+        fromCache();
+      }
+    }).catch(function(){ tile.onload=function(){done(null,tile);}; tile.onerror=function(e){done(e,tile);}; tile.src=url; });
+    return tile;
+  }
+});
+function cachedTileLayer(url, opts){ return new CachedTileLayer(url, opts); }
+
+var layers = {
+  satellite: cachedTileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:20, attribution:'Esri World Imagery'}),
+  streets: cachedTileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap'}),
+  topo: cachedTileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {maxZoom:17, attribution:'&copy; OpenTopoMap (CC-BY-SA)'}),
+};
+var hybridLabels = cachedTileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {maxZoom:20});
+var hybridGroup = L.layerGroup([layers.satellite, hybridLabels]);
+
+var activeLayer = null;
+function setBaseLayer(key){
+  if(activeLayer) map.removeLayer(activeLayer);
+  if(key==='hybrid'){ activeLayer = hybridGroup; }
+  else{ activeLayer = layers[key] || layers.satellite; }
+  activeLayer.addTo(map);
+  state.baseLayer = key;
+  document.querySelectorAll('.bm-opt').forEach(function(o){ o.classList.toggle('sel', o.dataset.layer===key); });
+}
+setBaseLayer('satellite');
+L.control.scale({ metric:true, imperial:false, position:'topleft', maxWidth:120 }).addTo(map);
+
+/* ---------- Download de área para uso offline ---------- */
+function tileXY(lon, lat, z){
+  var latRad = lat*Math.PI/180;
+  var n = Math.pow(2, z);
+  return {
+    x: Math.floor((lon+180)/360*n),
+    y: Math.floor((1-Math.log(Math.tan(latRad)+1/Math.cos(latRad))/Math.PI)/2*n)
+  };
+}
+function layersForCurrentBase(){
+  return state.baseLayer==='hybrid' ? [layers.satellite, hybridLabels] : [layers[state.baseLayer] || layers.satellite];
+}
+var downloadCancelled = false;
+async function downloadVisibleArea(){
+  if(!cacheSupported){ toast('Este navegador não suporta cache de mapas offline'); return; }
+  var pad = parseInt(el('cfgDownloadRange').value, 10) - 1; // 0,1,2
+  var bounds = map.getBounds();
+  var baseZoom = map.getZoom();
+  var zooms = [];
+  for(var z=Math.max(baseZoom-pad,0); z<=Math.min(baseZoom+pad,19); z++) zooms.push(z);
+  var tileLayersToUse = layersForCurrentBase();
+  var jobs = [];
+  zooms.forEach(function(z){
+    var nw = tileXY(bounds.getWest(), bounds.getNorth(), z);
+    var se = tileXY(bounds.getEast(), bounds.getSouth(), z);
+    for(var x=Math.min(nw.x,se.x); x<=Math.max(nw.x,se.x); x++){
+      for(var y=Math.min(nw.y,se.y); y<=Math.max(nw.y,se.y); y++){
+        tileLayersToUse.forEach(function(tl){ jobs.push({tl:tl, x:x, y:y, z:z}); });
+      }
+    }
+  });
+  if(jobs.length > 2500){ toast('Área/zoom grandes demais ('+jobs.length+' tiles). Aproxime o mapa ou reduza a abrangência.'); return; }
+  if(!jobs.length){ toast('Nada para baixar nesta seleção'); return; }
+  downloadCancelled = false;
+  el('dlProgressWrap').classList.add('show');
+  el('btnDownloadArea').disabled = true;
+  var cache = await caches.open(TILE_CACHE);
+  var done=0, total=jobs.length, ok=0, idx=0, concurrency=6;
+  function setProgress(){
+    var pct = Math.round(done/total*100);
+    el('dlProgressFill').style.width = pct+'%';
+    el('dlProgressTxt').textContent = done+' / '+total+' tiles ('+pct+'%)';
+  }
+  setProgress();
+  function worker(){
+    return new Promise(function(resolve){
+      function next(){
+        if(downloadCancelled || idx>=jobs.length){ resolve(); return; }
+        var job = jobs[idx++];
+        var url = job.tl.getTileUrl({x:job.x, y:job.y, z:job.z});
+        fetch(url).then(function(resp){
+          if(resp && resp.ok){ ok++; return cache.put(url, resp.clone()); }
+        }).catch(function(){}).then(function(){ done++; setProgress(); next(); });
+      }
+      next();
+    });
+  }
+  var workers=[]; for(var i=0;i<concurrency;i++) workers.push(worker());
+  await Promise.all(workers);
+  el('btnDownloadArea').disabled = false;
+  toast(downloadCancelled ? 'Download cancelado' : ('Mapa salvo offline: '+ok+'/'+total+' tiles'));
+  refreshCacheInfo();
+}
+async function refreshCacheInfo(){
+  if(!cacheSupported){ el('cacheInfo').textContent = 'Cache de mapas não suportado neste navegador.'; return; }
+  try{
+    var cache = await caches.open(TILE_CACHE);
+    var keys = await cache.keys();
+    var sizeTxt = '';
+    if(navigator.storage && navigator.storage.estimate){
+      var est = await navigator.storage.estimate();
+      if(est && est.usage) sizeTxt = ' · ~'+(est.usage/1048576).toFixed(1)+' MB usados no total do app';
+    }
+    el('cacheInfo').textContent = keys.length+' tiles salvos para uso offline'+sizeTxt+'.';
+  }catch(e){ el('cacheInfo').textContent = 'Não foi possível ler o cache de mapas.'; }
+}
+el('btnDownloadArea').addEventListener('click', downloadVisibleArea);
+el('btnClearCache').addEventListener('click', async function(){
+  if(!cacheSupported) return;
+  if(!confirm('Apagar todos os mapas baixados para uso offline?')) return;
+  await caches.delete(TILE_CACHE);
+  toast('Mapas offline apagados');
+  refreshCacheInfo();
+});
+
+/* ---------- Indicador online/offline ---------- */
+function updateOnlineBanner(){
+  el('offlineBanner').classList.toggle('show', !navigator.onLine);
+}
+window.addEventListener('online', updateOnlineBanner);
+window.addEventListener('offline', updateOnlineBanner);
+updateOnlineBanner();
+
+var featureLayerGroup = L.layerGroup().addTo(map);
+var draftLayerGroup = L.layerGroup().addTo(map);
+var posMarker = null, posAccCircle = null;
+
+/* ===================== UTM (proj4) ===================== */
+function utmDef(lat, lon){
+  var zone, south;
+  if(state.utmZoneOverride){
+    zone = state.utmZoneOverride.zone;
+    south = state.utmZoneOverride.hemi === 'S';
+  }else{
+    zone = Math.floor((lon + 180) / 6) + 1;
+    south = lat < 0;
+  }
+  var def = '+proj=utm +zone='+zone+(south?' +south':'')+' +datum=WGS84 +units=m +no_defs';
+  return { def: def, zone: zone, hemi: south ? 'S' : 'N' };
+}
+function datumLabel(){ return state.datum==='sirgas2000' ? 'SIRGAS 2000' : 'WGS 84'; }
+function datumShort(){ return state.datum==='sirgas2000' ? 'SIRGAS2000' : 'WGS84'; }
+function toUTM(lat, lon){
+  var u = utmDef(lat, lon);
+  var xy = proj4(u.def).forward([lon, lat]);
+  return { e: xy[0], n: xy[1], zone: u.zone, hemi: u.hemi };
+}
+function projectPointsToUTM(coords){ // [[lon,lat],...] -> [[x,y],...] usando zona do primeiro ponto
+  if(!coords.length) return [];
+  var u = utmDef(coords[0][1], coords[0][0]);
+  var p = proj4(u.def);
+  return coords.map(function(c){ var xy = p.forward([c[0], c[1]]); return [xy[0], xy[1]]; });
+}
+
+/* ===================== CÁLCULOS GEODÉSICOS ===================== */
+function distanceM(lat1, lon1, lat2, lon2){
+  var a = toUTM(lat1, lon1), b;
+  var u = utmDef(lat1, lon1);
+  var xy2 = proj4(u.def).forward([lon2, lat2]);
+  var dx = xy2[0]-a.e, dy = xy2[1]-a.n;
+  return Math.sqrt(dx*dx+dy*dy);
+}
+function bearingDeg(lat1, lon1, lat2, lon2){
+  var phi1 = lat1*Math.PI/180, phi2 = lat2*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+  var y = Math.sin(dLon)*Math.cos(phi2);
+  var x = Math.cos(phi1)*Math.sin(phi2) - Math.sin(phi1)*Math.cos(phi2)*Math.cos(dLon);
+  var brng = Math.atan2(y,x)*180/Math.PI;
+  return (brng+360)%360;
+}
+function polylineLength(coords){ // [[lon,lat],...]
+  var total = 0;
+  for(var i=1;i<coords.length;i++){
+    total += distanceM(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]);
+  }
+  return total;
+}
+function polygonAreaAndPerimeter(coords){
+  if(coords.length < 3) return { area:0, perimeter: polylineLength(coords) };
+  var utm = projectPointsToUTM(coords);
+  var area = 0;
+  for(var i=0;i<utm.length;i++){
+    var j = (i+1)%utm.length;
+    area += utm[i][0]*utm[j][1] - utm[j][0]*utm[i][1];
+  }
+  area = Math.abs(area)/2;
+  var closed = coords.slice(); closed.push(coords[0]);
+  return { area: area, perimeter: polylineLength(closed) };
+}
+function areaText(m2){
+  if(state.areaUnit==='m2') return fmt(m2,1)+' m²';
+  if(state.areaUnit==='ha') return fmt(m2/10000,4)+' ha';
+  return m2 >= 10000 ? fmt(m2/10000,4)+' ha' : fmt(m2,1)+' m²';
+}
+
+/* ===================== GNSS (Geolocation API) ===================== */
+var watchId = null;
+function initGeolocation(){
+  if(!('geolocation' in navigator)){
+    state.simulated = true; startSimulation(); return;
+  }
+  watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
+    enableHighAccuracy:true, maximumAge:1000, timeout:12000
+  });
+}
+function onPosition(pos){
+  state.simulated = false;
+  var c = pos.coords;
+  state.lastFix = {
+    lat:c.latitude, lon:c.longitude, alt:c.altitude,
+    acc:c.accuracy, vacc:c.altitudeAccuracy, ts:pos.timestamp
+  };
+  updateFixUI();
+  updatePositionMarker();
+}
+function onPositionError(err){
+  if(!state.lastFix){ state.simulated = true; startSimulation(); }
+}
+function startSimulation(){
+  toast('GNSS indisponível — usando posição simulada para demonstração', 3200);
+  var center = map.getCenter();
+  var lat = center.lat, lon = center.lng;
+  setInterval(function(){
+    if(!state.simulated) return;
+    lat += (Math.random()-0.5)*0.00003;
+    lon += (Math.random()-0.5)*0.00003;
+    state.lastFix = { lat:lat, lon:lon, alt: 320 + Math.random()*4, acc: 3+Math.random()*4, vacc: 5+Math.random()*4, ts: Date.now() };
+    updateFixUI();
+    updatePositionMarker();
+  }, 1500);
+}
+
+var mapCenteredOnce = false;
+function updatePositionMarker(){
+  var f = state.lastFix; if(!f) return;
+  var ll = [f.lat, f.lon];
+  if(!posMarker){
+    posMarker = L.circleMarker(ll, { radius:7, color:'#ff7a1a', weight:2, fillColor:'#ff7a1a', fillOpacity:.9 }).addTo(map);
+    posAccCircle = L.circle(ll, { radius:f.acc||5, color:'#ff7a1a', weight:1, fillColor:'#ff7a1a', fillOpacity:.08 }).addTo(map);
+  }else{
+    posMarker.setLatLng(ll);
+    posAccCircle.setLatLng(ll);
+    posAccCircle.setRadius(f.acc||5);
+  }
+  if(!mapCenteredOnce){ map.setView(ll, 17); mapCenteredOnce = true; }
+}
+
+function classifyFix(acc){
+  if(acc===undefined||acc===null||isNaN(acc)) return {label:'Sem sinal', cls:'bad', emoji:'🔴'};
+  if(acc<=5) return {label:'Precisão Alta', cls:'good', emoji:'🟢'};
+  if(acc<=15) return {label:'Precisão Boa', cls:'good', emoji:'🟡'};
+  if(acc<=30) return {label:'Precisão Moderada', cls:'warn', emoji:'🟠'};
+  return {label:'Precisão Baixa', cls:'bad', emoji:'🔴'};
+}
+function fixSubLabel(f){
+  return fmt(f.acc,1)+' m'+(state.simulated?' · simulado':'');
+}
+function estimateSats(acc){
+  if(acc===undefined||acc===null||isNaN(acc)) return '—';
+  if(acc<=3) return '11–16';
+  if(acc<=8) return '8–11';
+  if(acc<=20) return '5–8';
+  return '3–5';
+}
+function estimateHdop(acc){
+  if(acc===undefined||acc===null||isNaN(acc)) return '—';
+  var h = Math.max(0.6, Math.min(8, acc/4));
+  return fmt(h,1);
+}
+
+function updateFixUI(){
+  var f = state.lastFix; if(!f) return;
+  var qual = classifyFix(f.acc);
+  el('topEmoji').textContent = qual.emoji;
+  el('topFixTxt').textContent = qual.label.replace('Precisão ','');
+  el('topFixAcc').textContent = fixSubLabel(f);
+  el('consoleDot').className = 'status-dot '+qual.cls;
+  el('consoleFixTxt').textContent = qual.label;
+  el('consoleSrc').textContent = 'FONTE: '+(state.simulated ? 'SIMULADO' : 'GNSS DO DISPOSITIVO');
+
+  var pct = Math.max(4, Math.min(100, 100 - (f.acc||50)*2));
+  el('accBarFill').style.width = pct+'%';
+
+  el('dLat').innerHTML = fmt(f.lat,6)+'&deg;';
+  el('dLon').innerHTML = fmt(f.lon,6)+'&deg;';
+  var u = toUTM(f.lat, f.lon);
+  el('dUtmE').innerHTML = fmt(u.e,2)+' <small>m</small>';
+  el('dUtmN').innerHTML = fmt(u.n,2)+' <small>m</small>';
+  el('dZone').textContent = u.zone+u.hemi+' · '+datumShort();
+  el('dAlt').innerHTML = (f.alt===null||f.alt===undefined) ? '—' : fmt(f.alt,1)+' <small>m</small>';
+  el('dHAcc').innerHTML = fmt(f.acc,1)+' <small>m</small>';
+  el('dVAcc').innerHTML = (f.vacc===null||f.vacc===undefined||isNaN(f.vacc)) ? '<small>indisp.</small>' : fmt(f.vacc,1)+' <small>m</small>';
+  el('dSats').textContent = estimateSats(f.acc);
+  el('dHdop').textContent = estimateHdop(f.acc);
+
+  updateLiveCalc();
+}
+
+/* ===================== CAPTURA ===================== */
+var modeIcons = {
+  point: '<circle cx="12" cy="12" r="7" fill="currentColor"/>',
+  line: '<path d="M5 19 19 5" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>',
+  polygon: '<polygon points="12,4 20,10 17,19 7,19 4,10" fill="currentColor"/>'
+};
+function setMode(m){
+  if(state.drafting && m!==state.mode){ toast('Finalize ou cancele a coleta atual antes de trocar o modo'); return; }
+  state.mode = m;
+  document.querySelectorAll('.mode-btn').forEach(function(b){ b.classList.toggle('sel', b.dataset.mode===m); });
+  el('captureIcon').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24">'+modeIcons[m]+'</svg>';
+}
+document.querySelectorAll('.mode-btn').forEach(function(b){ b.addEventListener('click', function(){ setMode(b.dataset.mode); }); });
+
+function startDrafting(){
+  state.drafting = true;
+  state.draftCoords = [];
+  clearDraftLayers();
+  el('undoVertexBtn').style.display = 'flex';
+  el('finishBtn').style.display = 'flex';
+  el('vertexCount').style.display = 'flex';
+  el('calcPill').style.display = 'flex';
+}
+function clearDraftLayers(){ draftLayerGroup.clearLayers(); }
+function redrawDraft(){
+  clearDraftLayers();
+  var latlngs = state.draftCoords.map(function(c){ return [c[1], c[0]]; });
+  latlngs.forEach(function(ll, i){
+    L.circleMarker(ll, { radius:5, color:'#2dd4bf', weight:2, fillColor:'#2dd4bf', fillOpacity:1 }).addTo(draftLayerGroup);
+  });
+  if(latlngs.length>1){
+    if(state.mode==='polygon'){
+      L.polygon(latlngs, { color:'#2dd4bf', weight:2, fillColor:'#2dd4bf', fillOpacity:.12, dashArray:'5,5' }).addTo(draftLayerGroup);
+    }else{
+      L.polyline(latlngs, { color:'#2dd4bf', weight:3, dashArray:'6,6' }).addTo(draftLayerGroup);
+    }
+  }
+  el('vertexCount').textContent = state.draftCoords.length;
+}
+function positionCalcPillForDraft(){
+  var pill = el('calcPill');
+  var cluster = el('captureCluster');
+  var rect = cluster.getBoundingClientRect();
+  pill.style.top = (rect.bottom + 10) + 'px';
+  pill.style.bottom = 'auto';
+}
+function positionCalcPillAboveToolbar(toolbarEl){
+  var pill = el('calcPill');
+  var rect = toolbarEl.getBoundingClientRect();
+  pill.style.bottom = (window.innerHeight - rect.top + 10) + 'px';
+  pill.style.top = 'auto';
+}
+function resetCalcPillPosition(){
+  var pill = el('calcPill');
+  pill.style.top = 'auto';
+  pill.style.bottom = '';
+}
+function updateLiveCalc(){
+  var pill = el('calcPill');
+  if(measureState || editState) return; // essas ferramentas controlam o painel por conta própria
+  if(!state.drafting || state.draftCoords.length===0){ pill.style.display='none'; return; }
+  pill.style.display = 'flex';
+  positionCalcPillForDraft();
+  var coords = state.draftCoords.slice();
+  var f = state.lastFix;
+  var previewCoords = coords;
+  if(f) previewCoords = coords.concat([[f.lon, f.lat]]);
+
+  if(state.mode==='line'){
+    var len = polylineLength(previewCoords.length>1?previewCoords:coords);
+    var az = '—';
+    if(previewCoords.length>=2){
+      var a=previewCoords[previewCoords.length-2], b=previewCoords[previewCoords.length-1];
+      az = fmt(bearingDeg(a[1],a[0],b[1],b[0]),1)+'°';
+    }
+    pill.innerHTML = '<span>DIST</span>'+fmt(len,1)+' m &nbsp; <span>AZ</span>'+az;
+  }else if(state.mode==='polygon'){
+    var r = polygonAreaAndPerimeter(previewCoords.length>=2?previewCoords:coords);
+    pill.innerHTML = '<span>ÁREA</span>'+areaText(r.area)+' &nbsp; <span>PERÍM</span>'+fmt(r.perimeter,1)+' m';
+  }else{
+    pill.style.display = 'none';
+  }
+}
+window.addEventListener('resize', function(){
+  if(state.drafting) positionCalcPillForDraft();
+  else if(measureState) positionCalcPillAboveToolbar(el('measureToolbar'));
+  else if(editState) positionCalcPillAboveToolbar(el('editToolbar'));
+});
+window.addEventListener('orientationchange', function(){
+  setTimeout(function(){
+    if(state.drafting) positionCalcPillForDraft();
+    else if(measureState) positionCalcPillAboveToolbar(el('measureToolbar'));
+    else if(editState) positionCalcPillAboveToolbar(el('editToolbar'));
+  }, 200);
+});
+
+function doVibrate(pattern){
+  if(state.vibrate && navigator.vibrate){ try{ navigator.vibrate(pattern); }catch(e){} }
+}
+function ensureAudio(){
+  if(!state.audioCtx){
+    try{ state.audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+  }
+  return state.audioCtx;
+}
+function playTone(freq, dur, delay){
+  if(!state.sound) return;
+  var ctx = ensureAudio(); if(!ctx) return;
+  var t0 = ctx.currentTime + (delay||0);
+  var osc = ctx.createOscillator(); var gain = ctx.createGain();
+  osc.type = 'sine'; osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(0.18, t0+0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(t0); osc.stop(t0+dur+0.02);
+}
+function playTick(){ playTone(1400, 0.09, 0); }
+function playConfirm(){ playTone(900, 0.09, 0); playTone(1500, 0.13, 0.09); }
+function fireFlash(){
+  var flash = el('captureFlash');
+  flash.classList.remove('fire'); void flash.offsetWidth; flash.classList.add('fire');
+  setTimeout(function(){ flash.classList.remove('fire'); }, 600);
+}
+function fireCheck(){
+  var btn = el('captureBtn');
+  btn.classList.remove('saved'); void btn.offsetWidth; btn.classList.add('saved');
+  setTimeout(function(){ btn.classList.remove('saved'); }, 600);
+}
+function updateSessionPill(){
+  var p = currentProject();
+  el('projectFeatCount').textContent = p ? p.features.length : 0;
+}
+
+el('captureBtn').addEventListener('click', function(){
+  var f = state.lastFix;
+  if(!f){ toast('Aguardando sinal GNSS…'); doVibrate(80); return; }
+  fireFlash(); doVibrate(25); playTick();
+  if(state.mode==='point'){
+    openAttrSheetForNew({ type:'Point', coordinates:[f.lon, f.lat, f.alt||0] });
+    return;
+  }
+  if(!state.drafting) startDrafting();
+  state.draftCoords.push([f.lon, f.lat, f.alt||0]);
+  redrawDraft();
+  updateLiveCalc();
+});
+el('undoVertexBtn').addEventListener('click', function(){
+  if(!state.drafting) return;
+  state.draftCoords.pop();
+  if(state.draftCoords.length===0){ cancelDrafting(); return; }
+  redrawDraft(); updateLiveCalc();
+});
+el('finishBtn').addEventListener('click', function(){
+  if(!state.drafting) return;
+  var minPts = state.mode==='polygon' ? 3 : 2;
+  if(state.draftCoords.length < minPts){ toast('Registre ao menos '+minPts+' vértices'); return; }
+  var geomType = state.mode==='polygon' ? 'Polygon' : 'LineString';
+  var coords = state.draftCoords.slice();
+  if(geomType==='Polygon') coords = coords.concat([coords[0]]);
+  var geometry = geomType==='Polygon' ? { type:'Polygon', coordinates:[coords] } : { type:'LineString', coordinates:coords };
+  openAttrSheetForNew(geometry);
+});
+function cancelDrafting(){
+  state.drafting = false;
+  state.draftCoords = [];
+  clearDraftLayers();
+  el('undoVertexBtn').style.display = 'none';
+  el('finishBtn').style.display = 'none';
+  el('vertexCount').style.display = 'none';
+  el('calcPill').style.display = 'none';
+  resetCalcPillPosition();
+}
+
+/* ===================== ATRIBUTOS / SALVAR FEIÇÃO ===================== */
+var pendingGeometry = null;
+function openAttrSheetForNew(geometry){
+  pendingGeometry = geometry;
+  el('attrTitle').innerHTML = 'Nova feição <span class="x" data-close>&times;</span>';
+  el('attrName').value = '';
+  el('attrNotes').value = '';
+  el('attrRows').innerHTML = '';
+  addAttrRow();
+  bindCloseX();
+  openSheet('sheetAttrs');
+}
+function addAttrRow(k,v){
+  var row = document.createElement('div');
+  row.className = 'attr-row';
+  row.innerHTML = '<input placeholder="chave" class="ak" value="'+(k?escapeHtml(k):'')+'"><input placeholder="valor" class="av" value="'+(v?escapeHtml(v):'')+'"><button class="rm">&times;</button>';
+  row.querySelector('.rm').addEventListener('click', function(){ row.remove(); });
+  el('attrRows').appendChild(row);
+}
+el('btnAddAttrRow').addEventListener('click', function(){ addAttrRow(); });
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+el('btnCancelFeature').addEventListener('click', function(){ closeSheet('sheetAttrs'); pendingGeometry=null; });
+el('btnSaveFeature').addEventListener('click', async function(){
+  if(!pendingGeometry) return;
+  var attrs = {};
+  el('attrRows').querySelectorAll('.attr-row').forEach(function(r){
+    var k = r.querySelector('.ak').value.trim(); var v = r.querySelector('.av').value.trim();
+    if(k) attrs[k]=v;
+  });
+  var props = { name: el('attrName').value.trim() || defaultName(pendingGeometry.type), notes: el('attrNotes').value.trim(), capturedAt: new Date().toISOString() };
+  Object.keys(attrs).forEach(function(k){ props[k]=attrs[k]; });
+
+  if(pendingGeometry.type==='LineString'){
+    var len = polylineLength(pendingGeometry.coordinates);
+    props.comprimento_m = Number(len.toFixed(2));
+  }else if(pendingGeometry.type==='Polygon'){
+    var r = polygonAreaAndPerimeter(pendingGeometry.coordinates[0]);
+    props.area_m2 = Number(r.area.toFixed(2));
+    props.area_ha = Number((r.area/10000).toFixed(4));
+    props.perimetro_m = Number(r.perimeter.toFixed(2));
+  }
+
+  var feature = { type:'Feature', id: uid(), geometry: pendingGeometry, properties: props };
+  var p = currentProject();
+  p.features.push(feature);
+  await persistProject(p.id);
+  renderFeatureOnMap(feature);
+  closeSheet('sheetAttrs');
+  pendingGeometry = null;
+  if(state.drafting) cancelDrafting();
+  doVibrate([35,50,35]); playConfirm(); fireCheck();
+  toast('Feição salva no projeto');
+  refreshCounts();
+  updateSessionPill();
+});
+function defaultName(type){
+  var n = { Point:'Ponto', LineString:'Linha', Polygon:'Polígono' }[type] || 'Feição';
+  var count = currentProject().features.filter(function(f){ return f.geometry.type===type; }).length + 1;
+  return n+' '+count;
+}
+function bindCloseX(){
+  document.querySelectorAll('[data-close]').forEach(function(b){
+    b.onclick = function(){ b.closest('.sheet-backdrop').classList.remove('show'); };
+  });
+}
+
+/* ===================== RENDER DE FEIÇÕES ===================== */
+function redrawFeatures(){
+  featureLayerGroup.clearLayers();
+  var p = currentProject();
+  if(!p) return;
+  p.features.forEach(renderFeatureOnMap);
+  refreshCounts();
+}
+function styleForType(t){
+  if(t==='Point') return null;
+  if(t==='LineString') return { color:'#ff7a1a', weight:3 };
+  return { color:'#46d17a', weight:2, fillColor:'#46d17a', fillOpacity:.15 };
+}
+function renderFeatureOnMap(feature){
+  var g = feature.geometry;
+  var layer;
+  if(g.type==='Point'){
+    layer = L.circleMarker([g.coordinates[1], g.coordinates[0]], { radius:6, color:'#ff7a1a', weight:2, fillColor:'#ff7a1a', fillOpacity:.85 });
+  }else if(g.type==='LineString'){
+    layer = L.polyline(g.coordinates.map(function(c){ return [c[1],c[0]]; }), styleForType('LineString'));
+  }else if(g.type==='Polygon'){
+    layer = L.polygon(g.coordinates[0].map(function(c){ return [c[1],c[0]]; }), styleForType('Polygon'));
+  }else return;
+  layer.on('click', function(){ openFeatureDetail(feature.id); });
+  layer.addTo(featureLayerGroup);
+}
+
+/* ===================== DETALHE / EXCLUIR ===================== */
+function openFeatureDetail(id){
+  var p = currentProject();
+  var f = p.features.find(function(x){ return x.id===id; });
+  if(!f) return;
+  state.selectedFeatureId = id;
+  el('fdTitle').innerHTML = escapeHtml(f.properties.name||'Feição')+' <span class="x" data-close>&times;</span>';
+  var rows = '';
+  rows += detailRow('Tipo', ({Point:'Ponto',LineString:'Linha',Polygon:'Polígono'})[f.geometry.type]);
+  if(f.geometry.type==='Point'){
+    rows += detailRow('Latitude', fmt(f.geometry.coordinates[1],6)+'°');
+    rows += detailRow('Longitude', fmt(f.geometry.coordinates[0],6)+'°');
+    rows += detailRow('Altitude', fmt(f.geometry.coordinates[2],1)+' m');
+    var u = toUTM(f.geometry.coordinates[1], f.geometry.coordinates[0]);
+    rows += detailRow('UTM', fmt(u.e,2)+' E / '+fmt(u.n,2)+' N — Zona '+u.zone+u.hemi+' ('+datumShort()+')');
+  }
+  Object.keys(f.properties).forEach(function(k){
+    if(k==='name') return;
+    rows += detailRow(k, String(f.properties[k]));
+  });
+  el('fdBody').innerHTML = rows;
+  bindCloseX();
+  openSheet('sheetFeatureDetail');
+}
+function detailRow(k,v){
+  return '<div class="field" style="margin-bottom:10px;"><label>'+escapeHtml(k)+'</label><div style="font-family:var(--mono); font-size:13.5px;">'+escapeHtml(v)+'</div></div>';
+}
+el('btnDeleteFeature').addEventListener('click', async function(){
+  var p = currentProject();
+  p.features = p.features.filter(function(f){ return f.id!==state.selectedFeatureId; });
+  await persistProject(p.id);
+  redrawFeatures();
+  closeSheet('sheetFeatureDetail');
+  toast('Feição excluída');
+});
+
+/* ===================== EDIÇÃO DE GEOMETRIA ===================== */
+var editState = null;
+function vtxIcon(){
+  return L.divIcon({className:'', html:'<div style="width:16px;height:16px;border-radius:50%;background:#ff7a1a;border:2.5px solid #08211d;box-shadow:0 0 0 2px rgba(255,255,255,.55)"></div>', iconSize:[16,16], iconAnchor:[8,8]});
+}
+function midIcon(){
+  return L.divIcon({className:'', html:'<div style="width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.6);border:2px solid rgba(45,212,191,.95)"></div>', iconSize:[11,11], iconAnchor:[5,5]});
+}
+function enterEditMode(id){
+  var p = currentProject();
+  var f = p.features.find(function(x){ return x.id===id; });
+  if(!f) return;
+  closeSheet('sheetFeatureDetail');
+  var type = f.geometry.type;
+  var coords;
+  if(type==='Point'){
+    coords = [f.geometry.coordinates.slice()];
+  }else if(type==='LineString'){
+    coords = f.geometry.coordinates.map(function(c){ return c.slice(); });
+  }else if(type==='Polygon'){
+    var ring = f.geometry.coordinates[0].map(function(c){ return c.slice(); });
+    if(ring.length>1){
+      var a=ring[0], b=ring[ring.length-1];
+      if(a[0]===b[0] && a[1]===b[1]) ring.pop();
+    }
+    coords = ring;
+  }else return;
+  editState = { id:id, type:type, coords:coords, group:L.layerGroup().addTo(map) };
+  resetCalcPillPosition();
+  redrawFeaturesExcept(id);
+  document.body.classList.add('editing');
+  el('editToolbar').classList.add('show');
+  el('btnEditReverse').style.display = (type==='LineString') ? 'flex' : 'none';
+  el('editHint').textContent = type==='Point' ? 'Arraste o ponto até a nova posição e toque em Concluir' : 'Arraste os pontos para mover • toque nos pontos claros para inserir • toque num vértice para mais opções';
+  renderEditVertices();
+  var b = L.latLngBounds(coords.map(function(c){ return [c[1],c[0]]; }));
+  if(b.isValid()) map.fitBounds(b.pad(.4));
+}
+function redrawFeaturesExcept(id){
+  featureLayerGroup.clearLayers();
+  var p = currentProject();
+  p.features.forEach(function(f){ if(f.id!==id) renderFeatureOnMap(f); });
+}
+function renderEditVertices(){
+  editState.group.clearLayers();
+  var coords = editState.coords;
+  var latlngs = coords.map(function(c){ return [c[1],c[0]]; });
+
+  editState.shapeLayer = null;
+  if(editState.type==='LineString' && latlngs.length>1){
+    editState.shapeLayer = L.polyline(latlngs, { color:'#2dd4bf', weight:3 }).addTo(editState.group);
+  }else if(editState.type==='Polygon' && latlngs.length>2){
+    editState.shapeLayer = L.polygon(latlngs, { color:'#2dd4bf', weight:2, fillColor:'#2dd4bf', fillOpacity:.12 }).addTo(editState.group);
+  }
+  editState.midGroup = L.layerGroup().addTo(editState.group);
+  renderMidpoints();
+  editState.vertexMarkers = coords.map(function(c, i){
+    var marker = L.marker([c[1],c[0]], { icon:vtxIcon(), draggable:true }).addTo(editState.group);
+    marker.on('drag', function(e){
+      var ll = e.target.getLatLng();
+      editState.coords[i][0] = ll.lng; editState.coords[i][1] = ll.lat;
+      updateShapeLatLngs(); updateLiveEditCalc();
+    });
+    marker.on('dragend', function(){ renderMidpoints(); });
+    if(editState.type!=='Point'){
+      marker.on('click', function(e){ L.DomEvent.stopPropagation(e); showVertexPopup(i); });
+    }
+    return marker;
+  });
+  updateLiveEditCalc();
+}
+function updateShapeLatLngs(){
+  if(!editState.shapeLayer) return;
+  editState.shapeLayer.setLatLngs(editState.coords.map(function(c){ return [c[1],c[0]]; }));
+}
+function renderMidpoints(){
+  editState.midGroup.clearLayers();
+  if(editState.type==='Point') return;
+  var coords = editState.coords;
+  var n = coords.length;
+  var segCount = editState.type==='Polygon' ? n : n-1;
+  for(var i=0;i<segCount;i++){
+    var a = coords[i], b = coords[(i+1)%n];
+    var midLl = [(a[1]+b[1])/2, (a[0]+b[0])/2];
+    (function(insertAt, ll){
+      var m = L.marker(ll, { icon: midIcon() }).addTo(editState.midGroup);
+      m.on('click', function(){ insertVertexAt(insertAt, [ll[1], ll[0], 0]); });
+    })(i+1, midLl);
+  }
+}
+function insertVertexAt(index, lonlatalt){
+  editState.coords.splice(index, 0, lonlatalt);
+  renderEditVertices();
+  doVibrate(20);
+}
+function deleteVertex(i){
+  var minCount = editState.type==='Polygon' ? 3 : 2;
+  if(editState.coords.length<=minCount){ toast('Mínimo de '+minCount+' vértices para este tipo de geometria'); return; }
+  editState.coords.splice(i,1);
+  map.closePopup();
+  renderEditVertices();
+  doVibrate(30);
+}
+function showVertexPopup(i){
+  var c = editState.coords[i];
+  var box = document.createElement('div');
+  box.className = 'vtx-popup-btns';
+  var minCount = editState.type==='Polygon' ? 3 : 2;
+  var canDelete = editState.coords.length > minCount;
+  var delBtn = document.createElement('button');
+  delBtn.className = 'danger';
+  delBtn.textContent = canDelete ? '🗑 Excluir vértice' : '🗑 Mínimo de vértices atingido';
+  if(!canDelete) delBtn.disabled = true;
+  delBtn.addEventListener('click', function(){ deleteVertex(i); });
+  box.appendChild(delBtn);
+  if(editState.type==='LineString' && i>0 && i<editState.coords.length-1){
+    var splitBtn = document.createElement('button');
+    splitBtn.textContent = '✂ Dividir linha aqui';
+    splitBtn.addEventListener('click', function(){ map.closePopup(); splitLineAt(i); });
+    box.appendChild(splitBtn);
+  }
+  var cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancelar';
+  cancelBtn.addEventListener('click', function(){ map.closePopup(); });
+  box.appendChild(cancelBtn);
+  L.popup({ className:'vtx-popup', closeButton:false, offset:[0,-10] }).setLatLng([c[1],c[0]]).setContent(box).openOn(map);
+}
+function updateLiveEditCalc(){
+  var pill = el('calcPill');
+  if(!editState || editState.type==='Point'){ pill.style.display='none'; return; }
+  pill.style.display = 'flex';
+  positionCalcPillAboveToolbar(el('editToolbar'));
+  if(editState.type==='LineString'){
+    var len = polylineLength(editState.coords);
+    pill.innerHTML = '<span>COMPR.</span>'+fmt(len,1)+' m';
+  }else{
+    var r = polygonAreaAndPerimeter(editState.coords);
+    pill.innerHTML = '<span>ÁREA</span>'+areaText(r.area)+' &nbsp; <span>PERÍM</span>'+fmt(r.perimeter,1)+' m';
+  }
+}
+async function splitLineAt(i){
+  if(i<=0 || i>=editState.coords.length-1){ toast('Escolha um vértice interior para dividir'); return; }
+  var coordsA = editState.coords.slice(0, i+1);
+  var coordsB = editState.coords.slice(i);
+  var p = currentProject();
+  var orig = p.features.find(function(x){ return x.id===editState.id; });
+  var baseName = (orig.properties.name || 'Linha');
+  var propsBase = {}; Object.keys(orig.properties).forEach(function(k){ propsBase[k]=orig.properties[k]; });
+  var propsA = {}; Object.keys(propsBase).forEach(function(k){ propsA[k]=propsBase[k]; });
+  var propsB = {}; Object.keys(propsBase).forEach(function(k){ propsB[k]=propsBase[k]; });
+  propsA.name = baseName+' (parte 1)'; propsA.comprimento_m = Number(polylineLength(coordsA).toFixed(2));
+  propsB.name = baseName+' (parte 2)'; propsB.comprimento_m = Number(polylineLength(coordsB).toFixed(2));
+  var featA = { type:'Feature', id: uid(), geometry:{ type:'LineString', coordinates:coordsA }, properties: propsA };
+  var featB = { type:'Feature', id: uid(), geometry:{ type:'LineString', coordinates:coordsB }, properties: propsB };
+  p.features = p.features.filter(function(x){ return x.id!==editState.id; });
+  p.features.push(featA, featB);
+  await persistProject(p.id);
+  exitEditMode(false);
+  redrawFeatures();
+  doVibrate([30,40,30]);
+  toast('Linha dividida em duas feições');
+}
+function exitEditMode(){
+  if(editState){ map.removeLayer(editState.group); editState = null; }
+  document.body.classList.remove('editing');
+  el('editToolbar').classList.remove('show');
+  el('calcPill').style.display = 'none';
+  map.closePopup();
+}
+el('btnEditGeometry').addEventListener('click', function(){ enterEditMode(state.selectedFeatureId); });
+el('btnEditReverse').addEventListener('click', function(){
+  if(!editState || editState.type!=='LineString') return;
+  editState.coords.reverse();
+  renderEditVertices();
+  doVibrate(20);
+  toast('Ordem da linha invertida');
+});
+el('btnEditCancel').addEventListener('click', function(){
+  exitEditMode();
+  redrawFeatures();
+  toast('Edição cancelada');
+});
+el('btnEditDone').addEventListener('click', async function(){
+  if(!editState) return;
+  var p = currentProject();
+  var f = p.features.find(function(x){ return x.id===editState.id; });
+  if(!f){ exitEditMode(); return; }
+  if(editState.type==='Point'){
+    f.geometry.coordinates = editState.coords[0];
+  }else if(editState.type==='LineString'){
+    if(editState.coords.length<2){ toast('A linha precisa de ao menos 2 vértices'); return; }
+    f.geometry.coordinates = editState.coords;
+    f.properties.comprimento_m = Number(polylineLength(editState.coords).toFixed(2));
+  }else if(editState.type==='Polygon'){
+    if(editState.coords.length<3){ toast('O polígono precisa de ao menos 3 vértices'); return; }
+    var closed = editState.coords.concat([editState.coords[0]]);
+    f.geometry.coordinates = [closed];
+    var r = polygonAreaAndPerimeter(editState.coords);
+    f.properties.area_m2 = Number(r.area.toFixed(2));
+    f.properties.area_ha = Number((r.area/10000).toFixed(4));
+    f.properties.perimetro_m = Number(r.perimeter.toFixed(2));
+  }
+  await persistProject(p.id);
+  exitEditMode();
+  redrawFeatures();
+  doVibrate([30,40,30]); playConfirm();
+  toast('Geometria atualizada');
+});
+
+/* ===================== FERRAMENTAS CARTOGRÁFICAS ===================== */
+el('btnTools').addEventListener('click', function(){ openSheet('sheetTools'); });
+el('rowMeasureDist').addEventListener('click', function(){ closeSheet('sheetTools'); startMeasure('distance'); });
+el('rowMeasureArea').addEventListener('click', function(){ closeSheet('sheetTools'); startMeasure('area'); });
+el('rowCompass').addEventListener('click', function(){ closeSheet('sheetTools'); openSheet('sheetCompass'); startCompass(); });
+
+/* ---- Medir distância / área (não gera feição) ---- */
+var measureState = null;
+function startMeasure(kind){
+  if(editState){ toast('Conclua a edição de geometria antes de medir'); return; }
+  measureState = { kind: kind, coords: [], group: L.layerGroup().addTo(map) };
+  document.body.classList.add('measuring');
+  el('measureToolbar').classList.add('show');
+  el('measureHint').textContent = kind==='distance'
+    ? 'Toque no mapa para marcar pontos • mostra distância e azimute do último trecho'
+    : 'Toque no mapa para desenhar o contorno • mostra área e perímetro';
+  el('btnMeasureUndo').style.display = 'flex';
+  el('calcPill').style.display = 'none';
+  resetCalcPillPosition();
+}
+function stopMeasure(){
+  if(measureState){ map.removeLayer(measureState.group); measureState = null; }
+  document.body.classList.remove('measuring');
+  el('measureToolbar').classList.remove('show');
+  el('calcPill').style.display = 'none';
+}
+function redrawMeasure(){
+  measureState.group.clearLayers();
+  var latlngs = measureState.coords.map(function(c){ return [c[1],c[0]]; });
+  latlngs.forEach(function(ll){ L.circleMarker(ll, { radius:5, color:'#ff7a1a', weight:2, fillColor:'#ff7a1a', fillOpacity:1 }).addTo(measureState.group); });
+  if(latlngs.length>1){
+    if(measureState.kind==='area'){
+      L.polygon(latlngs, { color:'#ff7a1a', weight:2, fillColor:'#ff7a1a', fillOpacity:.12, dashArray:'5,5' }).addTo(measureState.group);
+    }else{
+      L.polyline(latlngs, { color:'#ff7a1a', weight:3, dashArray:'6,6' }).addTo(measureState.group);
+    }
+  }
+  var pill = el('calcPill');
+  if(!measureState.coords.length){ pill.style.display='none'; return; }
+  pill.style.display = 'flex';
+  positionCalcPillAboveToolbar(el('measureToolbar'));
+  if(measureState.kind==='distance'){
+    var len = polylineLength(measureState.coords);
+    var az = '—';
+    if(measureState.coords.length>=2){
+      var a = measureState.coords[measureState.coords.length-2], b = measureState.coords[measureState.coords.length-1];
+      az = fmt(bearingDeg(a[1],a[0],b[1],b[0]),1)+'°';
+    }
+    pill.innerHTML = '<span>DIST</span>'+fmt(len,1)+' m &nbsp; <span>AZ</span>'+az;
+  }else{
+    var r = polygonAreaAndPerimeter(measureState.coords);
+    pill.innerHTML = '<span>ÁREA</span>'+areaText(r.area)+' &nbsp; <span>PERÍM</span>'+fmt(r.perimeter,1)+' m';
+  }
+}
+map.on('click', function(e){
+  if(measureState){
+    measureState.coords.push([e.latlng.lng, e.latlng.lat]);
+    redrawMeasure();
+    doVibrate(15);
+  }
+});
+el('btnMeasureUndo').addEventListener('click', function(){
+  if(!measureState || !measureState.coords.length) return;
+  measureState.coords.pop();
+  redrawMeasure();
+});
+el('btnMeasureClear').addEventListener('click', function(){
+  if(!measureState) return;
+  measureState.coords = [];
+  redrawMeasure();
+});
+el('btnMeasureClose').addEventListener('click', function(){ stopMeasure(); });
+
+/* ---- Bússola ---- */
+var compassActive = false;
+function startCompass(){
+  if(compassActive) return;
+  compassActive = true;
+  if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+    DeviceOrientationEvent.requestPermission().then(function(resp){
+      if(resp==='granted') bindCompassEvents();
+      else el('compassSubTxt').textContent = 'Permissão de sensores negada pelo navegador.';
+    }).catch(function(){ el('compassSubTxt').textContent = 'Não foi possível acessar o sensor de orientação.'; });
+  }else{
+    bindCompassEvents();
+  }
+}
+function bindCompassEvents(){
+  var handler = function(e){
+    var heading = null;
+    if(typeof e.webkitCompassHeading === 'number') heading = e.webkitCompassHeading;
+    else if(e.absolute && typeof e.alpha === 'number') heading = 360 - e.alpha;
+    else if(typeof e.alpha === 'number') heading = 360 - e.alpha;
+    if(heading===null || isNaN(heading)) return;
+    heading = (heading+360)%360;
+    el('compassNeedle').setAttribute('transform', 'rotate('+heading.toFixed(0)+' 110 110)');
+    el('compassHeadingTxt').textContent = heading.toFixed(0)+'° '+headingLabel(heading);
+    el('compassSubTxt').textContent = 'Sensor ativo';
+  };
+  if('ondeviceorientationabsolute' in window){ window.addEventListener('deviceorientationabsolute', handler); }
+  else{ window.addEventListener('deviceorientation', handler); }
+  setTimeout(function(){
+    if(el('compassSubTxt').textContent.indexOf('Aguardando')===0){
+      el('compassSubTxt').textContent = 'Sensor de orientação indisponível neste aparelho/navegador.';
+    }
+  }, 2500);
+}
+function headingLabel(h){
+  var dirs = ['N','NE','L','SE','S','SO','O','NO'];
+  return dirs[Math.round(h/45)%8];
+}
+
+/* ---- Coordenadas do toque (toque e segure) ---- */
+map.on('contextmenu', function(e){
+  if(measureState || editState || state.drafting) return;
+  var lat = e.latlng.lat, lon = e.latlng.lng;
+  var u = toUTM(lat, lon);
+  var box = document.createElement('div');
+  box.className = 'vtx-popup-btns';
+  var info = document.createElement('div');
+  info.style.fontFamily = 'var(--mono)'; info.style.fontSize='12px'; info.style.lineHeight='1.7'; info.style.color='var(--text)';
+  info.innerHTML = 'Lat: '+fmt(lat,6)+'°<br>Lon: '+fmt(lon,6)+'°<br>UTM: '+fmt(u.e,1)+' E / '+fmt(u.n,1)+' N<br>Zona '+u.zone+u.hemi+' ('+datumShort()+')';
+  box.appendChild(info);
+  var closeBtn = document.createElement('button'); closeBtn.textContent='Fechar'; closeBtn.addEventListener('click', function(){ map.closePopup(); });
+  box.appendChild(closeBtn);
+  L.popup({ className:'vtx-popup', closeButton:false }).setLatLng(e.latlng).setContent(box).openOn(map);
+  doVibrate(15);
+});
+
+/* ===================== TOPO / CONTADORES ===================== */
+function renderProjectTop(){
+  var p = currentProject();
+  el('projectNameTop').textContent = p ? p.name : '—';
+}
+function refreshCounts(){
+  var p = currentProject();
+  if(!p) return;
+  var n = p.features.length;
+  el('featSummary').textContent = n+' feição'+(n===1?'':'ões');
+  var count = Object.keys(state.projects).length;
+  el('projSummary').textContent = count+' projeto'+(count===1?'':'s')+' · ativo: '+p.name;
+  updateSessionPill();
+}
+
+/* ===================== MENU / PROJETOS UI ===================== */
+el('btnMenu').addEventListener('click', function(){ refreshCounts(); openSheet('sheetMenu'); });
+el('rowProjects').addEventListener('click', function(){ closeSheet('sheetMenu'); renderProjectList(); openSheet('sheetProjects'); });
+el('rowFeatures').addEventListener('click', function(){ closeSheet('sheetMenu'); renderFeatureList(); openSheet('sheetFeatures'); });
+el('rowExport').addEventListener('click', function(){ closeSheet('sheetMenu'); openSheet('sheetExport'); });
+el('rowImport').addEventListener('click', function(){ closeSheet('sheetMenu'); openSheet('sheetImport'); });
+el('rowBackup').addEventListener('click', function(){ closeSheet('sheetMenu'); openSheet('sheetBackup'); });
+
+var projectSearchTerm = '';
+el('projectSearch').addEventListener('input', function(e){ projectSearchTerm = e.target.value.trim().toLowerCase(); renderProjectList(); });
+
+function renderProjectList(){
+  var wrap = el('projectList'); wrap.innerHTML='';
+  var all = Object.values(state.projects).filter(function(p){
+    if(!projectSearchTerm) return true;
+    return p.name.toLowerCase().indexOf(projectSearchTerm)>-1 || (p.folder||'').toLowerCase().indexOf(projectSearchTerm)>-1;
+  });
+  if(!all.length){ wrap.innerHTML = '<div class="hint">Nenhum projeto encontrado.</div>'; return; }
+  var favs = all.filter(function(p){ return p.favorite; }).sort(function(a,b){ return b.createdAt-a.createdAt; });
+  var rest = all.filter(function(p){ return !p.favorite; });
+  var groups = {};
+  var order = [];
+  rest.forEach(function(p){
+    var key = p.folder || 'Sem pasta';
+    if(!groups[key]){ groups[key]=[]; order.push(key); }
+    groups[key].push(p);
+  });
+  order.sort(function(a,b){ if(a==='Sem pasta') return 1; if(b==='Sem pasta') return -1; return a.localeCompare(b); });
+
+  if(favs.length){
+    var h = document.createElement('div'); h.className='folder-header'; h.textContent='⭐ Favoritos'; wrap.appendChild(h);
+    favs.forEach(function(p){ wrap.appendChild(buildProjectRow(p)); });
+  }
+  order.forEach(function(key){
+    var h = document.createElement('div'); h.className='folder-header'; h.textContent='📁 '+key; wrap.appendChild(h);
+    groups[key].sort(function(a,b){ return b.createdAt-a.createdAt; }).forEach(function(p){ wrap.appendChild(buildProjectRow(p)); });
+  });
+}
+function buildProjectRow(p){
+  var row = document.createElement('div');
+  row.className = 'proj-item'+(p.id===state.activeId?' active':'');
+  row.innerHTML =
+    '<div class="dot"></div>'+
+    '<div class="fav'+(p.favorite?' on':'')+'">'+(p.favorite?'★':'☆')+'</div>'+
+    '<div class="tx"><div class="t1">'+escapeHtml(p.name)+'</div><div class="t2">'+p.features.length+' feições · '+new Date(p.createdAt).toLocaleDateString('pt-BR')+'</div></div>'+
+    '<div class="dup" title="Duplicar">⧉</div>'+
+    '<div class="del" title="Excluir">&#128465;</div>';
+  row.querySelector('.fav').addEventListener('click', async function(e){
+    e.stopPropagation();
+    p.favorite = !p.favorite;
+    await persistProject(p.id);
+    renderProjectList();
+  });
+  row.querySelector('.tx').addEventListener('click', async function(){ await setActiveProject(p.id); closeSheet('sheetProjects'); toast('Projeto ativo: '+p.name); });
+  row.querySelector('.tx').addEventListener('dblclick', async function(e){
+    e.stopPropagation();
+    var folder = prompt('Nome da pasta para "'+p.name+'" (deixe em branco para remover):', p.folder||'');
+    if(folder===null) return;
+    p.folder = folder.trim();
+    await persistProject(p.id);
+    renderProjectList();
+  });
+  row.querySelector('.dup').addEventListener('click', async function(e){
+    e.stopPropagation();
+    var clone = {
+      id: uid(), name: p.name+' (cópia)', createdAt: Date.now(), folder: p.folder||'', favorite:false,
+      features: p.features.map(function(f){ return { type:'Feature', id:uid(), geometry: JSON.parse(JSON.stringify(f.geometry)), properties: JSON.parse(JSON.stringify(f.properties)) }; })
+    };
+    state.projects[clone.id] = clone;
+    await persistProject(clone.id);
+    renderProjectList();
+    toast('Projeto duplicado: '+clone.name);
+  });
+  row.querySelector('.del').addEventListener('click', async function(e){
+    e.stopPropagation();
+    if(Object.keys(state.projects).length<=1){ toast('Mantenha ao menos um projeto'); return; }
+    if(!confirm('Excluir o projeto "'+p.name+'" e todas as suas feições?')) return;
+    delete state.projects[p.id];
+    await storageDelete('project:'+p.id);
+    if(state.activeId===p.id){ state.activeId = Object.keys(state.projects)[0]; await storageSet('meta:activeId', state.activeId); renderProjectTop(); redrawFeatures(); }
+    renderProjectList();
+  });
+  return row;
+}
+el('btnNewProject').addEventListener('click', async function(){
+  var name = prompt('Nome do novo projeto:', 'Projeto de campo '+(Object.keys(state.projects).length+1));
+  if(!name) return;
+  var p = { id: uid(), name: name.trim(), createdAt: Date.now(), features: [], favorite:false, folder:'' };
+  state.projects[p.id] = p;
+  await persistProject(p.id);
+  await setActiveProject(p.id);
+  renderProjectList();
+  toast('Projeto criado');
+});
+
+/* ===================== BACKUP COMPLETO ===================== */
+el('btnBackupExport').addEventListener('click', function(){
+  var payload = { app:'GeoCampo', exportedAt: new Date().toISOString(), projects: Object.values(state.projects) };
+  downloadBlob(JSON.stringify(payload, null, 2), 'geocampo-backup-'+new Date().toISOString().slice(0,10)+'.json', 'application/json');
+  toast('Backup baixado');
+});
+el('backupFileInput').addEventListener('change', function(e){
+  var file = e.target.files[0]; if(!file) return;
+  var reader = new FileReader();
+  reader.onload = async function(ev){
+    try{
+      var data = JSON.parse(ev.target.result);
+      var list = data.projects || (Array.isArray(data) ? data : []);
+      var count = 0;
+      for(var i=0;i<list.length;i++){
+        var src = list[i];
+        var np = {
+          id: uid(), name: src.name || ('Projeto restaurado '+(i+1)), createdAt: Date.now(),
+          favorite: !!src.favorite, folder: src.folder||'',
+          features: (src.features||[]).map(function(f){ return { type:'Feature', id:uid(), geometry:f.geometry, properties:f.properties||{} }; })
+        };
+        state.projects[np.id] = np;
+        await persistProject(np.id);
+        count++;
+      }
+      toast(count+' projeto(s) restaurado(s) do backup');
+      closeSheet('sheetBackup');
+      renderProjectList();
+      refreshCounts();
+    }catch(err){ toast('Arquivo de backup inválido'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+var selectMode = false;
+var selectedForMerge = [];
+el('btnToggleSelect').addEventListener('click', function(){
+  selectMode = !selectMode;
+  selectedForMerge = [];
+  el('btnToggleSelect').classList.toggle('active', selectMode);
+  el('btnToggleSelect').textContent = selectMode ? '☑ Selecionando linhas… toque em 2 para unir' : '☑ Selecionar linhas para unir';
+  el('btnMergeLines').style.display = 'none';
+  renderFeatureList();
+});
+el('btnMergeLines').addEventListener('click', async function(){
+  if(selectedForMerge.length!==2) return;
+  var p = currentProject();
+  var f1 = p.features.find(function(x){ return x.id===selectedForMerge[0]; });
+  var f2 = p.features.find(function(x){ return x.id===selectedForMerge[1]; });
+  if(!f1||!f2) return;
+  var c1 = f1.geometry.coordinates.slice();
+  var c2 = f2.geometry.coordinates.slice();
+  var end1 = c1[c1.length-1];
+  var costForward = distanceM(end1[1], end1[0], c2[0][1], c2[0][0]);
+  var costReversed = distanceM(end1[1], end1[0], c2[c2.length-1][1], c2[c2.length-1][0]);
+  var merged = costForward <= costReversed ? c1.concat(c2) : c1.concat(c2.slice().reverse());
+  var mergedFeature = {
+    type:'Feature', id: uid(),
+    geometry:{ type:'LineString', coordinates: merged },
+    properties:{ name:(f1.properties.name||'Linha')+' + '+(f2.properties.name||'Linha'), notes:'', capturedAt:new Date().toISOString(), comprimento_m: Number(polylineLength(merged).toFixed(2)) }
+  };
+  p.features = p.features.filter(function(x){ return x.id!==f1.id && x.id!==f2.id; });
+  p.features.push(mergedFeature);
+  await persistProject(p.id);
+  selectMode = false; selectedForMerge = [];
+  el('btnToggleSelect').classList.remove('active');
+  el('btnToggleSelect').textContent = '☑ Selecionar linhas para unir';
+  el('btnMergeLines').style.display = 'none';
+  redrawFeatures();
+  renderFeatureList();
+  toast('Linhas unidas em uma única feição');
+});
+function renderFeatureList(){
+  var wrap = el('featureList'); wrap.innerHTML='';
+  var p = currentProject();
+  if(!p.features.length){ wrap.innerHTML = '<div class="hint">Nenhuma feição coletada ainda. Toque no botão laranja no mapa para começar.</div>'; return; }
+  p.features.slice().reverse().forEach(function(f){
+    var row = document.createElement('div');
+    row.className = 'row-btn';
+    var typeCls = f.geometry.type==='Point'?'pt':(f.geometry.type==='LineString'?'ln':'pg');
+    var icon = f.geometry.type==='Point' ? '&#9679;' : (f.geometry.type==='LineString' ? '&#8213;' : '&#9650;');
+    var meta = f.geometry.type==='Point' ? 'Ponto' : (f.geometry.type==='LineString' ? (f.properties.comprimento_m||0)+' m' : (f.properties.area_ha||0)+' ha');
+    var trailing = '<div class="chev">›</div>';
+    if(selectMode && f.geometry.type==='LineString'){
+      var checked = selectedForMerge.indexOf(f.id)>-1;
+      trailing = '<div class="feat-check'+(checked?' on':'')+'">'+(checked?'✓':'')+'</div>';
+    }
+    row.innerHTML = '<div class="feat-thumb '+typeCls+'">'+icon+'</div><div class="tx"><div class="t1">'+escapeHtml(f.properties.name)+'</div><div class="t2">'+meta+'</div></div>'+trailing;
+    row.addEventListener('click', function(){
+      if(selectMode && f.geometry.type==='LineString'){
+        var idx = selectedForMerge.indexOf(f.id);
+        if(idx>-1){ selectedForMerge.splice(idx,1); }
+        else{
+          if(selectedForMerge.length>=2){ toast('Selecione apenas 2 linhas por vez'); return; }
+          selectedForMerge.push(f.id);
+        }
+        el('btnMergeLines').style.display = selectedForMerge.length===2 ? 'flex' : 'none';
+        renderFeatureList();
+        return;
+      }
+      closeSheet('sheetFeatures'); openFeatureDetail(f.id); map.setView(centerOfFeature(f), map.getZoom());
+    });
+    wrap.appendChild(row);
+  });
+}
+function centerOfFeature(f){
+  var g = f.geometry;
+  if(g.type==='Point') return [g.coordinates[1], g.coordinates[0]];
+  var coords = g.type==='Polygon' ? g.coordinates[0] : g.coordinates;
+  var lat=0, lon=0; coords.forEach(function(c){ lat+=c[1]; lon+=c[0]; });
+  return [lat/coords.length, lon/coords.length];
+}
+
+/* ===================== CAMADAS ===================== */
+var BASEMAP_ORDER = ['satellite','hybrid','streets','topo'];
+var BASEMAP_NAMES = { satellite:'Satélite', hybrid:'Híbrido', streets:'Ruas', topo:'Topográfico' };
+var lastLayersTap = 0;
+el('btnLayers').addEventListener('click', function(){
+  var now = Date.now();
+  if(now - lastLayersTap < 350){
+    var idx = (BASEMAP_ORDER.indexOf(state.baseLayer)+1) % BASEMAP_ORDER.length;
+    setBaseLayer(BASEMAP_ORDER[idx]);
+    toast('Base: '+BASEMAP_NAMES[BASEMAP_ORDER[idx]]);
+    lastLayersTap = 0;
+    return;
+  }
+  lastLayersTap = now;
+  setTimeout(function(){
+    if(Date.now()-lastLayersTap >= 350){ openSheet('sheetLayers'); refreshCacheInfo(); syncLayerSheetControls(); }
+  }, 360);
+});
+document.querySelectorAll('.bm-opt').forEach(function(o){
+  o.addEventListener('click', function(){ setBaseLayer(o.dataset.layer); syncLayerSheetControls(); });
+});
+function syncLayerSheetControls(){
+  el('cfgOpacity').value = Math.round((state.baseOpacity!==undefined?state.baseOpacity:1)*100);
+  el('opacityVal').textContent = el('cfgOpacity').value+'%';
+  el('cfgCompareWith').value = state.compareWith || '';
+}
+el('cfgOpacity').addEventListener('input', function(e){
+  var v = parseInt(e.target.value,10)/100;
+  state.baseOpacity = v;
+  el('opacityVal').textContent = e.target.value+'%';
+  setLayerOpacity(activeLayer, v);
+});
+function setLayerOpacity(layer, v){
+  if(!layer) return;
+  if(layer.setOpacity) layer.setOpacity(v);
+  else if(layer.eachLayer) layer.eachLayer(function(l){ if(l.setOpacity) l.setOpacity(v); });
+}
+
+/* ---- Comparação entre bases (linha divisória arrastável) ---- */
+var compareLayer = null;
+el('cfgCompareWith').addEventListener('change', function(e){
+  state.compareWith = e.target.value;
+  if(compareLayer){ map.removeLayer(compareLayer); compareLayer = null; }
+  if(!state.compareWith){ el('compareDivider').classList.remove('show'); return; }
+  compareLayer = (layers[state.compareWith] || layers.satellite);
+  compareLayer.addTo(map);
+  el('compareDivider').classList.add('show');
+  positionCompareDivider(map.getSize().x/2);
+  applyCompareClip();
+});
+function positionCompareDivider(px){
+  el('compareDivider').style.left = px+'px';
+}
+function applyCompareClip(){
+  if(!compareLayer || !compareLayer._container) return;
+  var x = parseFloat(el('compareDivider').style.left)||map.getSize().x/2;
+  compareLayer._container.style.clip = 'rect(0px, 999999px, 999999px, '+x+'px)';
+}
+map.on('move zoom resize', function(){ if(compareLayer) applyCompareClip(); });
+(function(){
+  var dragging = false;
+  var handle = el('compareHandle'), divider = el('compareDivider');
+  function start(e){ if(!compareLayer) return; dragging = true; e.preventDefault(); }
+  function move(e){
+    if(!dragging) return;
+    var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    var rect = el('map').getBoundingClientRect();
+    var x = Math.max(0, Math.min(rect.width, clientX-rect.left));
+    positionCompareDivider(x);
+    applyCompareClip();
+  }
+  function end(){ dragging = false; }
+  handle.addEventListener('mousedown', start); handle.addEventListener('touchstart', start, {passive:false});
+  window.addEventListener('mousemove', move); window.addEventListener('touchmove', move, {passive:false});
+  window.addEventListener('mouseup', end); window.addEventListener('touchend', end);
+})();
+
+/* ===================== SETTINGS / ZOOM / CENTER ===================== */
+el('btnSettings').addEventListener('click', function(){ openSheet('sheetSettings'); });
+el('cfgCoordFormat').addEventListener('change', function(e){ state.coordFormat = e.target.value; saveSettings(); });
+el('cfgAreaUnit').addEventListener('change', function(e){ state.areaUnit = e.target.value; updateLiveCalc(); saveSettings(); });
+el('cfgDatum').addEventListener('change', function(e){ state.datum = e.target.value; saveSettings(); if(state.lastFix) updateFixUI(); toast('Referencial definido: '+datumLabel()); });
+el('cfgUtmZone').addEventListener('change', function(e){
+  var v = e.target.value;
+  if(v==='auto'){ state.utmZoneOverride = null; }
+  else{ state.utmZoneOverride = { zone: parseInt(v,10), hemi: v.slice(-1) }; }
+  saveSettings();
+  if(state.lastFix) updateFixUI();
+  toast(v==='auto' ? 'Fuso UTM: automático' : 'Fuso UTM fixado em '+v);
+});
+el('cfgVibrate').addEventListener('change', function(e){ state.vibrate = e.target.checked; saveSettings(); });
+el('cfgSound').addEventListener('change', function(e){ state.sound = e.target.checked; if(state.sound){ ensureAudio(); playTick(); } saveSettings(); });
+el('cfgSunlight').addEventListener('change', function(e){ state.sunlight = e.target.checked; document.body.classList.toggle('sunlight', state.sunlight); saveSettings(); });
+el('cfgTheme').addEventListener('change', function(e){
+  state.theme = e.target.value;
+  document.body.classList.toggle('light', state.theme==='light');
+  saveSettings();
+  toast('Tema: '+(state.theme==='light' ? 'Claro' : 'Escuro'));
+});
+el('cfgHand').addEventListener('change', function(e){ state.handedness = e.target.value; document.body.classList.toggle('lefty', state.handedness==='left'); saveSettings(); });
+el('cfgKeepAwake').addEventListener('change', function(e){
+  state.keepAwake = e.target.checked; saveSettings();
+  if(state.keepAwake) requestWakeLock(); else releaseWakeLock();
+});
+el('btnZoomIn').addEventListener('click', function(){ map.zoomIn(); });
+el('btnZoomOut').addEventListener('click', function(){ map.zoomOut(); });
+el('btnCenter').addEventListener('click', function(){
+  if(state.lastFix) map.setView([state.lastFix.lat, state.lastFix.lon], Math.max(map.getZoom(),17));
+  else toast('Aguardando posição…');
+});
+el('btnMore').addEventListener('click', function(){ el('fabSecondary').classList.toggle('open'); });
+
+/* ===================== TELA SEMPRE LIGADA (WAKE LOCK) ===================== */
+async function requestWakeLock(){
+  try{
+    if('wakeLock' in navigator && state.keepAwake){
+      state.wakeLock = await navigator.wakeLock.request('screen');
+    }
+  }catch(e){}
+}
+function releaseWakeLock(){
+  try{ if(state.wakeLock){ state.wakeLock.release(); state.wakeLock = null; } }catch(e){}
+}
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState==='visible' && state.keepAwake) requestWakeLock();
+});
+
+/* ===================== CONSOLE (recolhido por padrão) / DETALHES AVANÇADOS ===================== */
+var consoleCollapsed = true;
+function applyConsoleCollapsed(){
+  el('console').classList.toggle('collapsed', consoleCollapsed);
+  el('fabStack').classList.toggle('panel-collapsed', consoleCollapsed);
+  el('captureCluster').classList.toggle('panel-collapsed', consoleCollapsed);
+  el('modeStack').classList.toggle('panel-collapsed', consoleCollapsed);
+  el('calcPill').classList.toggle('panel-collapsed', consoleCollapsed);
+  el('captureFlash').classList.toggle('panel-collapsed', consoleCollapsed);
+  if(state.drafting) setTimeout(positionCalcPillForDraft, 260);
+}
+applyConsoleCollapsed();
+el('consoleHandle').addEventListener('click', function(){ consoleCollapsed = !consoleCollapsed; applyConsoleCollapsed(); });
+el('gnssChip').addEventListener('click', function(){ consoleCollapsed = false; applyConsoleCollapsed(); });
+var advOpen = false;
+el('advToggle').addEventListener('click', function(){
+  advOpen = !advOpen;
+  el('advGrid').classList.toggle('open', advOpen);
+  el('advNote').style.display = advOpen ? 'block' : 'none';
+  el('advToggle').textContent = advOpen ? 'Ocultar estimativas avançadas ▴' : 'Ver estimativas avançadas (satélites, HDOP) ▾';
+});
+
+/* ===================== EXPORTAÇÃO ===================== */
+function downloadBlob(content, filename, mime){
+  var blob = new Blob([content], { type: mime });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+}
+function toGeoJSON(p){
+  return JSON.stringify({
+    type:'FeatureCollection', name:p.name,
+    crs_note: 'Coordenadas em graus decimais (padrão GeoJSON, sempre WGS 84/SIRGAS 2000 — numericamente equivalentes). Referencial de exibição selecionado no app: '+datumLabel()+'.',
+    features: p.features
+  }, null, 2);
+}
+function coordsToKmlStr(g){
+  if(g.type==='Point') return g.coordinates.join(',');
+  if(g.type==='LineString') return g.coordinates.map(function(c){return c.join(',');}).join(' ');
+  if(g.type==='Polygon') return g.coordinates[0].map(function(c){return c.join(',');}).join(' ');
+}
+function toKML(p){
+  var placemarks = p.features.map(function(f){
+    var name = escapeHtml(f.properties.name||'');
+    var desc = escapeHtml(f.properties.notes||'');
+    var geomXml = '';
+    if(f.geometry.type==='Point') geomXml = '<Point><coordinates>'+coordsToKmlStr(f.geometry)+'</coordinates></Point>';
+    else if(f.geometry.type==='LineString') geomXml = '<LineString><coordinates>'+coordsToKmlStr(f.geometry)+'</coordinates></LineString>';
+    else geomXml = '<Polygon><outerBoundaryIs><LinearRing><coordinates>'+coordsToKmlStr(f.geometry)+'</coordinates></LinearRing></outerBoundaryIs></Polygon>';
+    return '<Placemark><name>'+name+'</name><description>'+desc+'</description>'+geomXml+'</Placemark>';
+  }).join('\n');
+  return '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>'+escapeHtml(p.name)+'</name>\n'+placemarks+'\n</Document></kml>';
+}
+function toGPX(p){
+  var wpts = p.features.filter(function(f){return f.geometry.type==='Point';}).map(function(f){
+    var c = f.geometry.coordinates;
+    return '<wpt lat="'+c[1]+'" lon="'+c[0]+'"><ele>'+(c[2]||0)+'</ele><name>'+escapeHtml(f.properties.name)+'</name></wpt>';
+  }).join('\n');
+  var trks = p.features.filter(function(f){return f.geometry.type==='LineString';}).map(function(f){
+    var pts = f.geometry.coordinates.map(function(c){ return '<trkpt lat="'+c[1]+'" lon="'+c[0]+'"><ele>'+(c[2]||0)+'</ele></trkpt>'; }).join('\n');
+    return '<trk><name>'+escapeHtml(f.properties.name)+'</name><trkseg>'+pts+'</trkseg></trk>';
+  }).join('\n');
+  var rtes = p.features.filter(function(f){return f.geometry.type==='Polygon';}).map(function(f){
+    var pts = f.geometry.coordinates[0].map(function(c){ return '<rtept lat="'+c[1]+'" lon="'+c[0]+'"></rtept>'; }).join('\n');
+    return '<rte><name>'+escapeHtml(f.properties.name)+' (polígono)</name>'+pts+'</rte>';
+  }).join('\n');
+  return '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="GeoCampo" xmlns="http://www.topografix.com/GPX/1/1">\n'+wpts+'\n'+trks+'\n'+rtes+'\n</gpx>';
+}
+function toCSV(p){
+  var rows = [['feicao_id','nome','tipo','seq','lat','lon','alt','utm_e','utm_n','fuso_utm','datum']];
+  p.features.forEach(function(f){
+    var g = f.geometry;
+    if(g.type==='Point'){
+      var u = toUTM(g.coordinates[1], g.coordinates[0]);
+      rows.push([f.id, f.properties.name, 'Ponto', 0, g.coordinates[1], g.coordinates[0], g.coordinates[2]||0, u.e.toFixed(2), u.n.toFixed(2), u.zone+u.hemi, datumShort()]);
+    }else{
+      var coords = g.type==='Polygon' ? g.coordinates[0] : g.coordinates;
+      coords.forEach(function(c,i){
+        var u = toUTM(c[1], c[0]);
+        rows.push([f.id, f.properties.name, g.type==='Polygon'?'Polígono':'Linha', i, c[1], c[0], c[2]||0, u.e.toFixed(2), u.n.toFixed(2), u.zone+u.hemi, datumShort()]);
+      });
+    }
+  });
+  return rows.map(function(r){ return r.map(function(v){ return typeof v==='string' && v.indexOf(',')>-1 ? '"'+v+'"' : v; }).join(','); }).join('\n');
+}
+function toDXF(p){
+  var entities = [];
+  p.features.forEach(function(f){
+    var g = f.geometry;
+    if(g.type==='Point'){
+      var u = toUTM(g.coordinates[1], g.coordinates[0]);
+      entities.push('0\nPOINT\n8\n'+layerFor(g.type)+'\n10\n'+u.e+'\n20\n'+u.n+'\n30\n'+(g.coordinates[2]||0));
+    }else{
+      var coords = g.type==='Polygon' ? g.coordinates[0] : g.coordinates;
+      var utm = coords.map(function(c){ var u = toUTM(c[1], c[0]); return [u.e, u.n]; });
+      var verts = utm.map(function(xy){ return '10\n'+xy[0]+'\n20\n'+xy[1]+'\n30\n0'; }).join('\n');
+      entities.push('0\nLWPOLYLINE\n8\n'+layerFor(g.type)+'\n90\n'+utm.length+'\n70\n'+(g.type==='Polygon'?1:0)+'\n'+verts);
+    }
+  });
+  var sample = p.features.length ? centerOfFeature(p.features[0]) : null;
+  var uSample = sample ? toUTM(sample[0], sample[1]) : null;
+  var header = '999\nGeoCampo — coordenadas em UTM, referencial '+datumLabel()+(uSample?(', fuso '+uSample.zone+uSample.hemi):'')+'\n';
+  return header+'0\nSECTION\n2\nENTITIES\n'+entities.join('\n')+'\n0\nENDSEC\n0\nEOF';
+}
+function layerFor(t){ return t==='Point'?'PONTOS':(t==='LineString'?'LINHAS':'POLIGONOS'); }
+
+var EXPORT_MIME = {
+  geojson:'application/geo+json', kml:'application/vnd.google-earth.kml+xml',
+  kmz:'application/vnd.google-earth.kmz', gpx:'application/gpx+xml', csv:'text/csv', dxf:'application/dxf'
+};
+async function buildExportFile(kind, p){
+  var base = p.name.replace(/[^a-z0-9\-_]+/gi,'_');
+  var content, mime = EXPORT_MIME[kind];
+  if(kind==='geojson') content = toGeoJSON(p);
+  else if(kind==='kml') content = toKML(p);
+  else if(kind==='gpx') content = toGPX(p);
+  else if(kind==='csv') content = toCSV(p);
+  else if(kind==='dxf') content = toDXF(p);
+  if(kind==='kmz'){
+    var zip = new JSZip();
+    zip.file('doc.kml', toKML(p));
+    var blob = await zip.generateAsync({type:'blob'});
+    return { blob: blob, filename: base+'.kmz', mime: mime };
+  }
+  return { blob: new Blob([content], { type: mime }), filename: base+'.'+kind, mime: mime };
+}
+document.querySelectorAll('[data-exp]').forEach(function(row){
+  row.addEventListener('click', async function(e){
+    if(e.target.closest('.exp-icon-btn')) return; // tratado pelo listener do botão de compartilhar
+    var p = currentProject();
+    if(!p.features.length){ toast('Este projeto ainda não tem feições'); return; }
+    var kind = row.dataset.exp;
+    var file = await buildExportFile(kind, p);
+    var a = document.createElement('a'); a.href = URL.createObjectURL(file.blob); a.download = file.filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+    toast('Exportado: '+file.filename);
+    closeSheet('sheetExport');
+  });
+  var shareBtn = row.querySelector('.exp-icon-btn[data-action="share"]');
+  if(shareBtn){
+    shareBtn.addEventListener('click', async function(e){
+      e.stopPropagation();
+      var p = currentProject();
+      if(!p.features.length){ toast('Este projeto ainda não tem feições'); return; }
+      var kind = row.dataset.exp;
+      var file = await buildExportFile(kind, p);
+      await shareFile(file, 'Dados do projeto '+p.name);
+    });
+  }
+});
+async function shareFile(file, title){
+  try{
+    var f = new File([file.blob], file.filename, { type: file.mime });
+    if(navigator.canShare && navigator.canShare({ files:[f] })){
+      await navigator.share({ files:[f], title: title });
+      return;
+    }
+  }catch(err){
+    if(err && err.name==='AbortError') return; // usuário cancelou o share sheet
+  }
+  toast('Compartilhamento direto não disponível — baixando o arquivo em vez disso');
+  var a = document.createElement('a'); a.href = URL.createObjectURL(file.blob); a.download = file.filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+}
+
+/* ===================== IMPORTAÇÃO ===================== */
+el('fileInput').addEventListener('change', function(e){
+  var file = e.target.files[0]; if(!file) return;
+  var reader = new FileReader();
+  reader.onload = async function(ev){
+    var text = ev.target.result;
+    var ext = file.name.split('.').pop().toLowerCase();
+    var added = 0;
+    try{
+      if(ext==='geojson' || ext==='json'){
+        var gj = JSON.parse(text);
+        var feats = gj.type==='FeatureCollection' ? gj.features : [gj];
+        feats.forEach(function(f){ addImportedFeature(f.geometry, f.properties||{}); added++; });
+      }else if(ext==='csv'){
+        added = importCSV(text);
+      }else if(ext==='gpx'){
+        added = importGPX(text);
+      }else if(ext==='kml'){
+        added = importKML(text);
+      }else{
+        toast('Formato não suportado'); return;
+      }
+      await persistProject(currentProject().id);
+      redrawFeatures();
+      closeSheet('sheetImport');
+      toast(added+' feição(ões) importada(s)');
+    }catch(err){
+      toast('Erro ao importar: verifique o arquivo');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+function addImportedFeature(geometry, properties){
+  var p = currentProject();
+  properties = properties || {};
+  if(!properties.name) properties.name = defaultName(geometry.type);
+  p.features.push({ type:'Feature', id: uid(), geometry: geometry, properties: properties });
+}
+function importCSV(text){
+  var lines = text.split(/\r?\n/).filter(Boolean);
+  if(!lines.length) return 0;
+  var header = lines[0].split(',').map(function(h){ return h.trim().toLowerCase(); });
+  var latIdx = header.indexOf('lat')>-1?header.indexOf('lat'):header.indexOf('latitude');
+  var lonIdx = header.indexOf('lon')>-1?header.indexOf('lon'):header.indexOf('longitude');
+  var nameIdx = header.indexOf('nome')>-1?header.indexOf('nome'):header.indexOf('name');
+  if(latIdx<0||lonIdx<0) return 0;
+  var count = 0;
+  for(var i=1;i<lines.length;i++){
+    var cols = lines[i].split(',');
+    var lat = parseFloat(cols[latIdx]), lon = parseFloat(cols[lonIdx]);
+    if(isNaN(lat)||isNaN(lon)) continue;
+    addImportedFeature({type:'Point', coordinates:[lon,lat,0]}, { name: nameIdx>-1?cols[nameIdx]:('Importado '+i) });
+    count++;
+  }
+  return count;
+}
+function importGPX(text){
+  var doc = new DOMParser().parseFromString(text, 'text/xml');
+  var count = 0;
+  doc.querySelectorAll('wpt').forEach(function(w){
+    var lat = parseFloat(w.getAttribute('lat')), lon = parseFloat(w.getAttribute('lon'));
+    var nm = w.querySelector('name'); 
+    addImportedFeature({type:'Point', coordinates:[lon,lat,0]}, { name: nm?nm.textContent:'Waypoint' });
+    count++;
+  });
+  doc.querySelectorAll('trk').forEach(function(t){
+    var coords = [];
+    t.querySelectorAll('trkpt').forEach(function(pt){ coords.push([parseFloat(pt.getAttribute('lon')), parseFloat(pt.getAttribute('lat')), 0]); });
+    if(coords.length>1){ var nm=t.querySelector('name'); addImportedFeature({type:'LineString', coordinates:coords}, { name: nm?nm.textContent:'Track' }); count++; }
+  });
+  return count;
+}
+function importKML(text){
+  var doc = new DOMParser().parseFromString(text, 'text/xml');
+  var count = 0;
+  doc.querySelectorAll('Placemark').forEach(function(pm){
+    var nmEl = pm.querySelector('name'); var nm = nmEl?nmEl.textContent:'Importado';
+    var pt = pm.querySelector('Point coordinates');
+    var ln = pm.querySelector('LineString coordinates');
+    var pg = pm.querySelector('Polygon coordinates');
+    function parseCoordStr(s){ return s.trim().split(/\s+/).map(function(t){ var p=t.split(',').map(Number); return [p[0],p[1],p[2]||0]; }); }
+    if(pt){ var c = parseCoordStr(pt.textContent)[0]; addImportedFeature({type:'Point', coordinates:c}, {name:nm}); count++; }
+    else if(ln){ addImportedFeature({type:'LineString', coordinates:parseCoordStr(ln.textContent)}, {name:nm}); count++; }
+    else if(pg){ addImportedFeature({type:'Polygon', coordinates:[parseCoordStr(pg.textContent)]}, {name:nm}); count++; }
+  });
+  return count;
+}
+
+/* ===================== INICIALIZAÇÃO ===================== */
+async function requestNativeLocationPermission(){
+  // Dentro do app Android empacotado (Capacitor), aciona o diálogo nativo de permissão
+  // de localização do sistema antes de usar a Geolocation API padrão do navegador.
+  try{
+    if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation){
+      await window.Capacitor.Plugins.Geolocation.requestPermissions();
+    }
+  }catch(e){ /* segue normalmente; o navegador ainda pode pedir permissão por conta própria */ }
+}
+async function init(){
+  await loadSettings();
+  await loadAllProjects();
+  renderProjectTop();
+  redrawFeatures();
+  setMode('point');
+  await requestNativeLocationPermission();
+  initGeolocation();
+  requestWakeLock();
+  refreshCacheInfo();
+}
+init();
+
+})();
+</script>
+</body>
+</html>

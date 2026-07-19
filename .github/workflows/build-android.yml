@@ -1,0 +1,61 @@
+name: Build APK Android (GeoCampo)
+
+# Roda automaticamente a cada push na branch principal, ou manualmente pela aba "Actions" no GitHub
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configurar Java (necessário para o Gradle/Android)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar dependências do projeto
+        run: npm install
+
+      - name: Sincronizar projeto Capacitor
+        run: npx cap sync android
+
+      - name: Dar permissão de execução ao Gradle
+        run: chmod +x android/gradlew
+
+      - name: Compilar APK de depuração (instalável direto no celular)
+        run: cd android && ./gradlew assembleDebug --no-daemon
+
+      - name: Publicar o APK como artefato do build
+        uses: actions/upload-artifact@v4
+        with:
+          name: geocampo-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+# ------------------------------------------------------------------
+# COMO OBTER O APK:
+# 1. Envie este repositório para o GitHub (git push).
+# 2. Abra a aba "Actions" no repositório — o build começa sozinho.
+# 3. Quando terminar (ícone verde), abra a execução e baixe o arquivo
+#    "geocampo-debug-apk" na seção "Artifacts", lá embaixo da página.
+# 4. Transfira o .apk para o celular Android e instale (ative
+#    "instalar de fontes desconhecidas" nas configurações do sistema,
+#    apenas para essa instalação).
+#
+# Este é um APK de DEPURAÇÃO — ótimo para uso pessoal e testes de campo.
+# Para publicar na Google Play Store, é necessário gerar uma versão
+# assinada (release) com uma chave própria — consulte o README.md.
+# ------------------------------------------------------------------
