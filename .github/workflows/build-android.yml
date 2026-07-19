@@ -39,6 +39,15 @@ jobs:
       - name: Dar permissão de execução ao Gradle
         run: chmod +x android/gradlew
 
+      - name: Diagnóstico do ambiente (aparece no log em caso de erro)
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          java -version
+          ls "$ANDROID_HOME" || true
+          ls "$ANDROID_HOME/platforms" || true
+
       - name: Compilar APK de depuração (instalável direto no celular)
         run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
 
