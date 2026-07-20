@@ -22,15 +22,24 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: List files for debug
+        run: ls -la
+
       - name: Install dependencies
         run: npm install
 
       - name: Prepare web assets
         run: |
           mkdir -p www
-          cp index.html www/
-          # Se tiver outros arquivos (css, js, imagens locais), copie-os também:
-          # cp -r assets www/ 2>/dev/null || true
+          # Copia index.html se existir
+          if [ -f index.html ]; then
+            cp index.html www/
+          else
+            echo "ERRO: index.html não encontrado na raiz!"
+            exit 1
+          fi
+          # Copia outros arquivos estáticos se existirem (ex: assets, css, js)
+          cp -r ./*.css ./*.js ./*.png ./*.jpg ./*.svg ./assets ./images 2>/dev/null || true
 
       - name: Init Capacitor
         run: npx cap init "GeoSense GNSS" com.seudominio.geosense --web-dir www
