@@ -1,73 +1,63 @@
-name: Build APK Android (GeoCampo)
+name: Build Android APK
 
-# Roda automaticamente a cada push na branch principal, ou manualmente pela aba "Actions" no GitHub
 on:
   push:
-    branches: [ main, master ]
-  workflow_dispatch: {}
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Baixar o código do repositório
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: 20
 
-      - name: Configurar Java (necessário para o Gradle/Android)
-        uses: actions/setup-java@v4
+      - name: Setup Java
+        uses: actions/setup-java@v5
         with:
-          distribution: 'temurin'
+          distribution: 'zulu'
           java-version: '17'
 
-      - name: Aceitar licenças do Android SDK (já pré-instalado no runner)
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+      - name: List files for debug
+        run: ls -la
 
-      - name: Garantir plataforma e build-tools necessários
-        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-
-      - name: Instalar dependências do projeto
+      - name: Install dependencies
         run: npm install
 
-      - name: Sincronizar projeto Capacitor
-        run: npx cap sync android
-
-      - name: Dar permissão de execução ao Gradle
-        run: chmod +x android/gradlew
-
-      - name: Diagnóstico do ambiente (aparece no log em caso de erro)
+      - name: Prepare web assets
         run: |
-          echo "JAVA_HOME=$JAVA_HOME"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          java -version
-          ls "$ANDROID_HOME" || true
-          ls "$ANDROID_HOME/platforms" || true
+          mkdir -p www
+          # Copia index.html se existir
+          if [ -f index.html ]; then
+            cp index.html www/
+          else
+            echo "ERRO: index.html não encontrado na raiz!"
+            exit 1
+          fi
+          # Copia outros arquivos estáticos se existirem (ex: assets, css, js)
+          cp -r ./*.css ./*.js ./*.png ./*.jpg ./*.svg ./assets ./images 2>/dev/null || true
 
-      - name: Compilar APK de depuração (instalável direto no celular)
-        run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Init Capacitor
+        run: npx cap init "GeoSense GNSS" com.seudominio.geosense --web-dir www
 
-      - name: Publicar o APK como artefato do build
+      - name: Add Android
+        run: npx cap add android
+
+      - name: Sync
+        run: npx cap sync
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: geocampo-debug-apk
+          name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
-
-# ------------------------------------------------------------------
-# COMO OBTER O APK:
-# 1. Envie este repositório para o GitHub (git push).
-# 2. Abra a aba "Actions" no repositório — o build começa sozinho.
-# 3. Quando terminar (ícone verde), abra a execução e baixe o arquivo
-#    "geocampo-debug-apk" na seção "Artifacts", lá embaixo da página.
-# 4. Transfira o .apk para o celular Android e instale (ative
-#    "instalar de fontes desconhecidas" nas configurações do sistema,
-#    apenas para essa instalação).
-#
-# Este é um APK de DEPURAÇÃO — ótimo para uso pessoal e testes de campo.
-# Para publicar na Google Play Store, é necessário gerar uma versão
-# assinada (release) com uma chave própria — consulte o README.md.
-# ------------------------------------------------------------------
